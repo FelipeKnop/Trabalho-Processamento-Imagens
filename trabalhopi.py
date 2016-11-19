@@ -59,7 +59,7 @@ def display_cmd(images):
     """Salva a imagem em um arquivo."""
     for image in images:
         click.echo('Salvando imagem')
-        misc.imsave('temp.png', image)
+        misc.imsave('output/temp.png', image)
         yield image
 
 if __name__ == "__main__":
