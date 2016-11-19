@@ -3,7 +3,7 @@
 ## Instalação
 
 ```
-# pip install scipy numpy matplotlib pillow
+# pip install click scipy numpy matplotlib pillow
 $ chmod +x trabalhopi.py
 ```
 
