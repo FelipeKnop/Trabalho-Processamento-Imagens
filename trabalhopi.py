@@ -74,6 +74,17 @@ def save(ctx):
     return image
 
 
+@cli.command('convert')
+@click.option('-m', '--mode', 'mode')
+@click.pass_context
+def colorspace(ctx, mode):
+    image = ctx.obj['result']
+    try:
+        converted_image = image.convert(mode)
+        ctx.obj['result'] = converted_image
+    except Exception as e:
+        click.echo('Imagem não pode ser convertida para "%s": %s' % (mode, e), err=True)
+
 # @cli.command('mse')
 # @processor
 # def mse(images)
