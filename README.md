@@ -49,6 +49,11 @@ $ ./trabalhopi.py open -i "digital1.jpg" save -o output/digital1.png
 $ ./trabalhopi.py open -i "digital1.jpg" gamma -g 2.2 display
 ```
 
+Também é possivel equalizar o histograma com **histeq**
+```shell
+$ ./trabalhopi.py open -i "digital1.jpg" histeq display
+```
+
 ### Filtros
 
 Alguns filtros podem ser aplicados através de seus respectivos comandos, por exemplo, **blur**.

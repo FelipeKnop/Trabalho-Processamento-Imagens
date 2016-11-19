@@ -73,6 +73,7 @@ def colorspace(ctx, mode):
         click.echo('Imagem não pode ser convertida para "%s": %s' % (mode, e), err=True)
 
 
+# TODO(andre:2016-11-19): Verificar se as contas estão certas
 @cli.command('mse')
 @click.option('-r', '--reference', 'reference')
 @click.pass_context
@@ -101,7 +102,9 @@ def mse(ctx, reference):
     mse = (diff**2).mean(axis=(0,1))
     click.echo("Erro quadrático medio: %s" % mse)
 
-
+# TODO(andre:2016-11-19): Verificar se as contas estão certas
+# BUG(andre:2016-11-19): Quando as imagens são iguais o ruido é igual a 0,
+# gerando uma divisão por zero
 @cli.command('snr')
 @click.option('-r', '--reference', 'reference')
 @click.pass_context
@@ -151,6 +154,35 @@ def gamma(ctx, c, gamma):
     gamma_image = PIL.Image.fromarray(np_image)
 
     ctx.obj['result'] = gamma_image
+
+
+@cli.command('histeq')
+@click.option('-b', '--bins', 'bins', default=256)
+@click.pass_context
+def histeq(ctx, bins):
+    """Aplica a equalização de histograma."""
+    image = ctx.obj['result']
+
+    click.echo("Aplicando equalização de histograma")
+
+    ycbcr_image = image.convert('YCbCr')
+
+    np_image = np.array(ycbcr_image)
+
+
+    channel = np_image[:,:,0]
+
+    histogram, bins_ar = np.histogram(channel, bins)
+    cdf = histogram.cumsum()
+    cdf = 255 * cdf / cdf[-1]
+
+    temp_image = np.interp(channel.flatten(), bins_ar[:-1], cdf)
+    np_image[:,:,0] = temp_image.reshape(channel.shape)
+
+
+    eq_image = PIL.Image.fromarray(np_image, 'YCbCr').convert('RGB')
+
+    ctx.obj['result'] = eq_image
 
 
 @cli.command('blur')
