@@ -41,6 +41,14 @@ $ ./trabalhopi.py open -i "digital1.jpg" convert -m L display
 $ ./trabalhopi.py open -i "digital1.jpg" save -o output/digital1.png
 ```
 
+### Espaços de cores
+
+É possivel aplicar transformações **gamma**
+
+```shell
+$ ./trabalhopi.py open -i "digital1.jpg" gamma -g 2.2 display
+```
+
 ### Filtros
 
 Alguns filtros podem ser aplicados através de seus respectivos comandos, por exemplo, **blur**.

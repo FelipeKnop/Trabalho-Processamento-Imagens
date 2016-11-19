@@ -36,22 +36,6 @@ def open(ctx, image):
         click.echo('Imagem não pode ser aberta "%s": %s' % (image, e), err=True)
 
 
-@cli.command('blur')
-@click.option('-r', '--radius', default=2, type=int,
-              help='Raio do filtro gaussiano.', show_default=True)
-@click.pass_context
-def blur(ctx, radius):
-    """Borra a imagem usando o filtro gaussiano."""
-    image = ctx.obj['result']
-    try:
-        click.echo('Aplicando filtro gaussiano com raio %s' % radius)
-        # blurred_image = scipy.ndimage.gaussian_filter(image, sigma=(sigma, sigma, 1))
-        blurred_image = image.filter(PIL.ImageFilter.GaussianBlur(radius))
-        ctx.obj['result'] = blurred_image
-    except Exception as e:
-        click.echo('Filtro não pode ser aplicado "%s": %s' % (image, e), err=True)
-
-
 @cli.command('display')
 @click.pass_context
 def display(ctx):
@@ -64,9 +48,8 @@ def display(ctx):
     # ctx.obj['result'] = image
 
 
-# TODO(andre:2016-11-18): Permitir passar o nome do arquivo que será salvo
-# TODO(andre:2016-11-18): Permitir especificar o formato a ser salvo? (o scipy
-# deduz o formato pela a extensão do arquivo)
+# TODO(andre:2016-11-18): Permitir especificar o formato a ser salvo?
+# (atualmente o formato é deduzido pela a extensão do arquivo)
 @cli.command('save')
 @click.option('-o', '--output', 'output', default="output/temp.png", type=click.Path())
 @click.pass_context
@@ -150,6 +133,41 @@ def mse(ctx, reference):
 
     snr = 10 * (np.log(signal / noise) / np.log(10))
     click.echo("Razão sinal-ruído: %s" % snr)
+
+
+@cli.command('gamma')
+@click.option('-c', default=1)
+@click.option('-g', '--gamma', 'gamma', default=1, type=click.FLOAT)
+@click.pass_context
+def gamma(ctx, c, gamma):
+    """Aplica a transformação gamma: s = c*r^g."""
+    image = ctx.obj['result']
+
+    click.echo("Aplicando transformação gamma")
+
+    np_image = np.array(image)
+    np_image = (c * 255 * (np_image/255)**gamma).astype(np.uint8)
+
+    gamma_image = PIL.Image.fromarray(np_image)
+
+    ctx.obj['result'] = gamma_image
+
+
+@cli.command('blur')
+@click.option('-r', '--radius', default=2, type=int,
+              help='Raio do filtro gaussiano.', show_default=True)
+@click.pass_context
+def blur(ctx, radius):
+    """Borra a imagem usando o filtro gaussiano."""
+    image = ctx.obj['result']
+    try:
+        click.echo('Aplicando filtro gaussiano com raio %s' % radius)
+        # blurred_image = scipy.ndimage.gaussian_filter(image, sigma=(sigma, sigma, 1))
+        blurred_image = image.filter(PIL.ImageFilter.GaussianBlur(radius))
+        ctx.obj['result'] = blurred_image
+    except Exception as e:
+        click.echo('Filtro não pode ser aplicado "%s": %s' % (image, e), err=True)
+
 
 if __name__ == "__main__":
     cli(obj={})
