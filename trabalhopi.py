@@ -7,6 +7,8 @@ import click
 import PIL.Image
 import PIL.ImageFilter
 
+import numpy as np
+
 @click.group(chain=True)
 def cli():
     """Processa imagens.
@@ -85,12 +87,34 @@ def colorspace(ctx, mode):
     except Exception as e:
         click.echo('Imagem não pode ser convertida para "%s": %s' % (mode, e), err=True)
 
-# @cli.command('mse')
-# @click.option('-r', '--reference', 'reference')
-# @click.pass_context
-# def mse(ctx, reference):
-#     """Calcula o erro quadratico medio entre duas imagens"""
-#     image = ctx.obj['result']
+
+@cli.command('mse')
+@click.option('-r', '--reference', 'reference')
+@click.pass_context
+def mse(ctx, reference):
+    """Calcula o erro quadratico medio entre duas imagens"""
+    image = ctx.obj['result']
+
+    try:
+        click.echo('Abrindo "%s"' % reference)
+        refimage = PIL.Image.open(reference).convert('RGB')
+    except Exception as e:
+        click.echo('Imagem não pode ser aberta "%s": %s' % (reference, e), err=True)
+
+    np_image = np.array(image)
+    np_refimage = np.array(refimage)
+
+    size = np_image.shape
+    refsize = np_refimage.shape
+
+    if size != refsize:
+        click.echo('Imagem base possui tamanho diferente da imagem de referência')
+        click.echo('%s != %s' % (size, refsize))
+        return
+
+    diff = (np_image.astype(int) - np_refimage.astype(int))
+    mse = (diff**2).mean(axis=(0,1))
+    click.echo("Erro quadrático medio: %s" % mse)
 
 
 if __name__ == "__main__":

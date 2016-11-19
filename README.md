@@ -49,6 +49,14 @@ Alguns filtros podem ser aplicados através de seus respectivos comandos, por ex
 $ ./trabalhopi.py open -i "digital1.jpg" blur -r 50 display
 ```
 
+### Estatísticas
+
+Algumas estatísticas das imagens podem ser obtidas, por exemplo, **mse**.
+
+```shell
+./trabalhopi.py open -i "digital1.jpg" blur -r 10 mse -r digital1.jpg
+```
+
 ### Encadeamento
 
 Pode-se encadear todos esses comandos de maneiras mais complexas, como em:
