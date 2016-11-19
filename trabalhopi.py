@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import math
+
 import click
 # import matplotlib.pyplot as plt
 # import scipy.misc
@@ -116,6 +118,38 @@ def mse(ctx, reference):
     mse = (diff**2).mean(axis=(0,1))
     click.echo("Erro quadrático medio: %s" % mse)
 
+
+@cli.command('snr')
+@click.option('-r', '--reference', 'reference')
+@click.pass_context
+def mse(ctx, reference):
+    """Calcula a razão sinal-ruído entre duas imagens"""
+    image = ctx.obj['result']
+
+    try:
+        click.echo('Abrindo "%s"' % reference)
+        refimage = PIL.Image.open(reference).convert('RGB')
+    except Exception as e:
+        click.echo('Imagem não pode ser aberta "%s": %s' % (reference, e), err=True)
+
+    np_image = np.array(image)
+    np_refimage = np.array(refimage)
+
+    size = np_image.shape
+    refsize = np_refimage.shape
+
+    if size != refsize:
+        click.echo('Imagem base possui tamanho diferente da imagem de referência')
+        click.echo('%s != %s' % (size, refsize))
+        return
+
+    diff = (np_image.astype(int) - np_refimage.astype(int))
+
+    signal = (np_image.astype(int)**2).sum(axis=(0,1))
+    noise = (diff**2).sum(axis=(0,1))
+
+    snr = 10 * (np.log(signal / noise) / np.log(10))
+    click.echo("Razão sinal-ruído: %s" % snr)
 
 if __name__ == "__main__":
     cli(obj={})

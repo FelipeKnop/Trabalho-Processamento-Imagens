@@ -51,10 +51,11 @@ $ ./trabalhopi.py open -i "digital1.jpg" blur -r 50 display
 
 ### Estatísticas
 
-Algumas estatísticas das imagens podem ser obtidas, por exemplo, **mse**.
+Algumas estatísticas das imagens podem ser obtidas, por exemplo, **mse** e o **snr**.
 
 ```shell
 ./trabalhopi.py open -i "digital1.jpg" blur -r 10 mse -r digital1.jpg
+./trabalhopi.py open -i "digital1.jpg" blur -r 10 snr -r digital1.jpg
 ```
 
 ### Encadeamento
