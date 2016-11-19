@@ -64,14 +64,14 @@ def display(ctx):
 # TODO(andre:2016-11-18): Permitir especificar o formato a ser salvo? (o scipy
 # deduz o formato pela a extensão do arquivo)
 @cli.command('save')
+@click.option('-o', '--output', 'output', default="output/temp.png", type=click.Path())
 @click.pass_context
-def save(ctx):
+def save(ctx, output):
     """Salva a imagem em um arquivo."""
     image = ctx.obj['result']
     click.echo('Salvando imagem')
     # scipy.misc.imsave('output/temp.png', image)
-    image.save('output/temp.png')
-    return image
+    image.save(output)
 
 
 @cli.command('convert')
@@ -86,9 +86,12 @@ def colorspace(ctx, mode):
         click.echo('Imagem não pode ser convertida para "%s": %s' % (mode, e), err=True)
 
 # @cli.command('mse')
-# @processor
-# def mse(images)
+# @click.option('-r', '--reference', 'reference')
+# @click.pass_context
+# def mse(ctx, reference):
 #     """Calcula o erro quadratico medio entre duas imagens"""
+#     image = ctx.obj['result']
+
 
 if __name__ == "__main__":
     cli(obj={})
