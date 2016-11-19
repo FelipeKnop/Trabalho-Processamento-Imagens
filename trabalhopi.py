@@ -13,12 +13,12 @@ from structure import processor
               multiple=True, help='Imagem a ser aberta.')
 @generator
 def open_cmd(images):
-    """"Carrega uma ou mais imagens para processamento. O parâmetro de entrada
+    """Carrega uma ou mais imagens para processamento. O parâmetro de entrada
     pode ser especificado várias vezes para carregar mais de uma imagem."""
     for image in images:
         try:
             click.echo('Abrindo "%s"' % image)
-            img = misc.imread(image)
+            img = misc.imread(image, False, 'RGB')
             yield img
         except Exception as e:
             click.echo('Imagem não pode ser aberta "%s": %s' % (image, e), err=True)
@@ -28,7 +28,7 @@ def open_cmd(images):
               help='Sigma do filtro gaussiano.', show_default=True)
 @processor
 def blur_cmd(images, sigma):
-    """"Borra a imagem usando o filtro gaussiano com SIGMA passado
+    """Borra a imagem usando o filtro gaussiano com SIGMA passado
     como parâmetro."""
     for image in images:
         try:
@@ -49,6 +49,18 @@ def display_cmd(images):
         plt.show()
         yield image
 
+
+# TODO(andre:2016-11-18): Permitir passar o nome do arquivo que será salvo
+# TODO(andre:2016-11-18): Permitir especificar o formato a ser salvo? (o scipy
+# deduz o formato pela a extensão do arquivo)
+@cli.command('save')
+@processor
+def display_cmd(images):
+    """Salva a imagem em um arquivo."""
+    for image in images:
+        click.echo('Salvando imagem')
+        misc.imsave('temp.png', image)
+        yield image
 
 if __name__ == "__main__":
     cli()
