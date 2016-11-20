@@ -3,7 +3,8 @@
 import click
 # import matplotlib.pyplot as plt
 # import scipy.misc
-# import scipy.ndimage
+import scipy.ndimage
+import scipy.signal
 import PIL.Image
 import PIL.ImageFilter
 
@@ -61,6 +62,9 @@ def save(ctx, output):
     image.save(output)
 
 
+# BUG(andre:2016-11-20): Alguns comandos não estão funcionando com imagens
+# preto e branco. Isso acontece porque as arrays delas não possuem três
+# dimensões
 @cli.command('convert')
 @click.option('-m', '--mode', 'mode')
 @click.pass_context
@@ -227,6 +231,101 @@ def threshold(ctx, threshold, algorithm):
 
     thresholded_image = PIL.Image.fromarray(np_image, 'YCbCr').convert('RGB')
     ctx.obj['result'] = thresholded_image
+
+
+@cli.command('convolve')
+@click.option('-a', '--axis', 'axis', default="xy", type=click.Choice(["x", "y", "xy"]))
+@click.option('-m', '--mode', 'mode', default="reflect", type=click.Choice(["reflect", "constant", "nearest", "mirror", "wrap"]))
+@click.option('-k', '--kernel', 'kernel', default=None, type=click.Choice(["gaussian", "prewitt", "sobel", "roberts", "laplace"]))
+@click.option('-x', '--dimension-x', 'dimension_x', default=3)
+@click.option('-y', '--dimension-y', 'dimension_y', default=3)
+@click.option('-g', '--degree', 'degree', default=1)
+@click.pass_context
+def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree):
+    image = ctx.obj['result']
+
+    np_image = np.array(image, dtype='float64')
+
+    if kernel == "prewitt":
+        Px = np.array([
+        [-1, 0, 1],
+        [-1, 0, 1],
+        [-1, 0, 1]])
+        Py = np.array([
+        [-1, -1, -1],
+        [0, 0, 0],
+        [1, 1, 1]])
+
+        for c in range(0, np_image.shape[2]):
+            dx = scipy.ndimage.filters.convolve(np_image[:,:,c], Px, mode=mode)
+            dy = scipy.ndimage.filters.convolve(np_image[:,:,c], Py, mode=mode)
+            np_image[:,:,c] = np.hypot(dx, dy)
+            max_value = np.max(np_image[:,:,c])
+            np_image[:,:,c] *= 255.0 / max_value
+
+    elif kernel == "sobel":
+        Sx = np.array([
+        [-1, 0, 1],
+        [-2, 0, 2],
+        [-1, 0, 1]])
+        Sy = np.array([
+        [-1, -2, -1],
+        [0, 0, 0],
+        [1, 2, 1]])
+
+        for c in range(0, np_image.shape[2]):
+            dx = scipy.ndimage.filters.convolve(np_image[:,:,c], Sx, mode=mode)
+            dy = scipy.ndimage.filters.convolve(np_image[:,:,c], Sy, mode=mode)
+            np_image[:,:,c] = np.hypot(dx, dy)
+            max_value = np.max(np_image[:,:,c])
+            np_image[:,:,c] *= 255.0 / max_value
+
+    elif kernel == "roberts":
+        Rx = np.array([
+        [1, 0],
+        [0, -1]])
+        Ry = np.array([
+        [0, 1],
+        [-1, 0]])
+
+        for c in range(0, np_image.shape[2]):
+            dx = scipy.ndimage.filters.convolve(np_image[:,:,c], Rx, mode=mode)
+            dy = scipy.ndimage.filters.convolve(np_image[:,:,c], Ry, mode=mode)
+            np_image[:,:,c] = np.hypot(dx, dy)
+            max_value = np.max(np_image[:,:,c])
+            np_image[:,:,c] *= 255.0 / max_value
+
+    elif kernel == "laplace":
+        L = np.array([
+        [0, -1, 0],
+        [-1, 4, -1],
+        [0, -1, 0]])
+
+        for c in range(0, np_image.shape[2]):
+            np_image[:,:,c] = scipy.ndimage.filters.convolve(np_image[:,:,c], L, mode=mode)
+            # np_image[:,:,c] -= np.min(np_image[:,:,c])
+            np_image[:,:,c] = np.absolute(np_image[:,:,c])
+            max_value = np.max(np_image[:,:,c])
+            np_image[:,:,c] *= 255.0 / max_value
+
+    else:
+        weights = box = np.ones((dimension_x, dimension_y))
+        for g in range(0, degree - 1):
+            weights = scipy.signal.convolve2d(weights, box, mode="same")
+
+        weights = weights / weights.sum()
+
+        if axis == "x":
+            np_image = scipy.ndimage.filters.convolve1d(np_image, weights[0], axis=0, mode=mode)
+        elif axis == "y":
+            np_image = scipy.ndimage.filters.convolve1d(np_image, weights[0], axis=1, mode=mode)
+        elif axis == "xy":
+            for c in range(0, np_image.shape[2]):
+                np_image[:,:,c] = scipy.ndimage.filters.convolve(np_image[:,:,c], weights, mode=mode)
+
+    convolved_image = PIL.Image.fromarray(np_image.astype('uint8'))
+
+    ctx.obj['result'] = convolved_image
 
 
 @cli.command('blur')
