@@ -31,6 +31,8 @@ Usar:
 ### Abrir/Exibir
 
 Os comandos básicos para uso da ferramenta são o **open** para abrir e **display** para exibir.
+O comando **open** suporta a opção **-i** para especificar o arquivo a ser processado.
+Enquanto **display** não tem nenhuma opção.
 
 ```shell
 $ ./trabalhopi.py open -i "sample/digital1.jpg" display
@@ -39,38 +41,50 @@ $ ./trabalhopi.py open -i "sample/digital1.jpg" display
 ### Salvar
 
 O comando **save** pode substituir a exibição na tela, bem como ser encadeado com o **display**.
+O comando **save** pode receber a opção **-o** seguido do caminho do arquivo de destino.
+Caso não seja especificado o destino, o arquivo será salvo como *output/temp.jpg*.
 
 ```shell
-$ ./trabalhopi.py open -i "sample/digital1.jpg" save -o output/temp.jpg
-$ ls output/temp.jpg
-$ ./trabalhopi.py open -i "sample/digital1.jpg" save -o output/temp.jpg display
+$ ./trabalhopi.py open -i "sample/digital1.jpg" save -o output/digital.jpg
+$ ./trabalhopi.py open -i "sample/digital1.jpg" save -o output/digital.jpg display
 ```
 
 ### Converter
 
-O comando **convert** agrupa os parâmetros para alterações básicas na imagem como as cores.
-É possível também converter o formato usando o comando save.
+O comando **convert** agrupa os parâmetros para alterações básicas na imagem.
+A opção **-m** permite a especificação de vários modos que definem o tipo e profundidade do pixel.
+Alguns modos comuns são "L" (tons de cinza), "RGB", "RGBA", "YCbCr". Para mais módulos ver [aqui](https://pillow.readthedocs.io/en/3.4.x/handbook/concepts.html#concept-modes).
 
 ```shell
 $ ./trabalhopi.py open -i "sample/digital1.jpg" convert -m L display
+```
+
+É possível também converter o formato da imagem usando o comando save.
+
+```shell
 $ ./trabalhopi.py open -i "sample/digital1.jpg" save -o output/digital1.png
 ```
 
 ### Espaços de cores
 
-É possível aplicar transformações **gamma**.
+É possível aplicar transformações **gamma**. Esse commando pode receber a opção **-g**
+seguido de um número de ponto flutuante para alterar o resultado da transformação.
+
 
 ```shell
 $ ./trabalhopi.py open -i "sample/digital1.jpg" gamma -g 2.2 display
 ```
 
-Também é possível equalizar o histograma com **histeq**.
+Também é possível equalizar o histograma com **histeq**. Esse comando não recebe parâmetros.
 
 ```shell
 $ ./trabalhopi.py open -i "sample/digital1.jpg" histeq display
 ```
 
-O comando **threshold** permite a binarazação por limiarização.
+O comando **threshold** permite a binarização por limiarização.
+É possível a especificação do limear através da opção **-t** ou a seleção do algoritmo
+para escolha automática do mesmo com a opção **-o**.
+Atualmente o único algoritmo disponível é o de Otsu.
 
 ```shell
 $ ./trabalhopi.py open -i "sample/digital1.jpg" threshold -t 128 display
@@ -79,7 +93,8 @@ $ ./trabalhopi.py open -i "sample/digital1.jpg" threshold -a otsu display
 
 ### Filtros
 
-Alguns filtros podem ser aplicados através de seus respectivos comandos, por exemplo, **blur**.
+Alguns filtros podem ser aplicados através de seus respectivos comandos.
+Atualmente apenas o filtro **blur** está disponível e suporta a opção **-r** para especificar o raio.
 
 ```shell
 $ ./trabalhopi.py open -i "sample/digital1.jpg" blur -r 50 display
@@ -87,20 +102,21 @@ $ ./trabalhopi.py open -i "sample/digital1.jpg" blur -r 50 display
 
 ### Estatísticas
 
-Algumas estatísticas das imagens podem ser obtidas, por exemplo, **mse** e o **snr**.
+Algumas estatísticas das imagens podem ser obtidas através dos comandos **mse** e o **snr**.
+Ambos comandos suportam a opção **-r** para especificação da imagem de referência.
 
 ```shell
-./trabalhopi.py open -i "sample/digital1.jpg" blur -r 10 mse -r sample/digital1.jpg
-./trabalhopi.py open -i "sample/digital1.jpg" blur -r 10 snr -r sample/digital1.jpg
+./trabalhopi.py open -i "sample/digital1.jpg" blur -r 10 mse -r "sample/digital1.jpg"
+./trabalhopi.py open -i "sample/digital1.jpg" blur -r 10 snr -r "sample/digital1.jpg"
 ```
 
 ### Encadeamento
 
-Pode-se encadear todos esses comandos de maneiras mais complexas, como em:
+Como pode-se notar os comandos podem ser encadeados de várias formas a fim de realizar o processamento da image.
 
 ```shell
 $ ./trabalhopi.py open -i "sample/digital1.jpg" \
-  convert -m L save -o output/grayscale.png \
-  blur -r 30 save -o output/distortion.png \
+  convert -m L save -o "output/grayscale.png" \
+  blur -r 30 save -o "output/distortion.png" \
   display
 ```
