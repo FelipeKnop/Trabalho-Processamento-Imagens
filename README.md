@@ -2,14 +2,26 @@
 
 ## Instalação
 
+Requisitos de software:
+- [Python 3](https://www.python.org/downloads/)
+- [pip](https://pypi.python.org/pypi/pip/)
+- [Git](https://git-scm.com/download)
+
+No terminal execute os seguintes comandos:
+
 ```
 # pip install click scipy numpy matplotlib pillow
+$ git clone https://github.com/FelipeKnop/Trabalho-Processamento-Imagens.git
+$ cd Trabalho-Processamento-Imagens
 $ chmod +x trabalhopi.py
 ```
 
 ## Como contribuir
 
-Seguir: PEP 8, PEP 8 naming, PEP 257
+Usar:
+- PEP 8 (exceto E231; E501 com 100 caracteres)
+- PEP 8 naming
+- PEP 257
 
 ## Como usar
 
@@ -43,15 +55,23 @@ $ ./trabalhopi.py open -i "digital1.jpg" save -o output/digital1.png
 
 ### Espaços de cores
 
-É possivel aplicar transformações **gamma**
+É possível aplicar transformações **gamma**.
 
 ```shell
 $ ./trabalhopi.py open -i "digital1.jpg" gamma -g 2.2 display
 ```
 
-Também é possivel equalizar o histograma com **histeq**
+Também é possível equalizar o histograma com **histeq**.
+
 ```shell
 $ ./trabalhopi.py open -i "digital1.jpg" histeq display
+```
+
+O comando **threshold** permite a binarazação por limiarização.
+
+```shell
+$ ./trabalhopi.py open -i "digital1.jpg" threshold -t 128 display
+$ ./trabalhopi.py open -i "digital1.jpg" threshold -a otsu display
 ```
 
 ### Filtros

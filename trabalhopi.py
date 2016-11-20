@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import math
-
 import click
 # import matplotlib.pyplot as plt
 # import scipy.misc
@@ -10,6 +8,7 @@ import PIL.Image
 import PIL.ImageFilter
 
 import numpy as np
+
 
 @click.group(chain=True)
 def cli():
@@ -21,6 +20,7 @@ def cli():
         trabalhopi open -i digital1.jpg blur -s 5 display
     """
     pass
+
 
 @cli.command('open')
 @click.option('-i', '--image', 'image', type=click.Path(), help='Imagem a ser aberta.')
@@ -78,7 +78,7 @@ def colorspace(ctx, mode):
 @click.option('-r', '--reference', 'reference')
 @click.pass_context
 def mse(ctx, reference):
-    """Calcula o erro quadratico medio entre duas imagens"""
+    """Calcula o erro quadrático médio entre duas imagens"""
     image = ctx.obj['result']
 
     try:
@@ -99,8 +99,9 @@ def mse(ctx, reference):
         return
 
     diff = (np_image.astype(int) - np_refimage.astype(int))
-    mse = (diff**2).mean(axis=(0,1))
+    mse = (diff**2).mean(axis=(0, 1))
     click.echo("Erro quadrático medio: %s" % mse)
+
 
 # TODO(andre:2016-11-19): Verificar se as contas estão certas
 # BUG(andre:2016-11-19): Quando as imagens são iguais o ruido é igual a 0,
@@ -108,7 +109,7 @@ def mse(ctx, reference):
 @cli.command('snr')
 @click.option('-r', '--reference', 'reference')
 @click.pass_context
-def mse(ctx, reference):
+def snr(ctx, reference):
     """Calcula a razão sinal-ruído entre duas imagens"""
     image = ctx.obj['result']
 
@@ -131,8 +132,8 @@ def mse(ctx, reference):
 
     diff = (np_image.astype(int) - np_refimage.astype(int))
 
-    signal = (np_image.astype(int)**2).sum(axis=(0,1))
-    noise = (diff**2).sum(axis=(0,1))
+    signal = (np_image.astype(int)**2).sum(axis=(0, 1))
+    noise = (diff**2).sum(axis=(0, 1))
 
     snr = 10 * (np.log(signal / noise) / np.log(10))
     click.echo("Razão sinal-ruído: %s" % snr)
@@ -149,7 +150,7 @@ def gamma(ctx, c, gamma):
     click.echo("Aplicando transformação gamma")
 
     np_image = np.array(image)
-    np_image = (c * 255 * (np_image/255)**gamma).astype(np.uint8)
+    np_image = (c * 255 * (np_image / 255)**gamma).astype(np.uint8)
 
     gamma_image = PIL.Image.fromarray(np_image)
 
@@ -166,9 +167,7 @@ def histeq(ctx, bins):
     click.echo("Aplicando equalização de histograma")
 
     ycbcr_image = image.convert('YCbCr')
-
     np_image = np.array(ycbcr_image)
-
 
     channel = np_image[:,:,0]
 
@@ -179,10 +178,55 @@ def histeq(ctx, bins):
     temp_image = np.interp(channel.flatten(), bins_ar[:-1], cdf)
     np_image[:,:,0] = temp_image.reshape(channel.shape)
 
-
     eq_image = PIL.Image.fromarray(np_image, 'YCbCr').convert('RGB')
-
     ctx.obj['result'] = eq_image
+
+
+@cli.command('threshold')
+@click.option('-t', '--threshold', 'threshold', default=128)
+@click.option('-a', '--algorithm', 'algorithm', default=None, type=click.Choice(["otsu"]))
+@click.pass_context
+def threshold(ctx, threshold, algorithm):
+    """Aplica a binarização por limiarização."""
+    image = ctx.obj['result']
+
+    click.echo("Aplicando binarização por limiarização")
+
+    ycbcr_image = image.convert('YCbCr')
+    np_image = np.array(ycbcr_image)
+
+    if algorithm == "otsu":
+        histogram, _ = np.histogram(np_image[:,:,0], 256)
+        P1 = histogram.cumsum()
+
+        av_intensity = np.arange(256) * histogram
+        m = av_intensity.cumsum()
+
+        best_variance = 0
+        for i in range(256):
+            wB = P1[i]
+            if wB == 0:
+                continue
+            wF = (P1[-1] - wB)
+            if wF == 0:
+                break
+            mB = m[i] / wB
+            mF = (m[-1] - m[i]) / wF
+            interclass_variance = wB * wF * (mB - mF)**2
+
+            if best_variance < interclass_variance:
+                best_variance = interclass_variance
+                threshold = i
+
+    mask = np_image[:,:,0] <= threshold
+    np_image[:,:,0] = 255
+    np_image[mask,0] = 0
+
+    np_image[:,:,1] = 128
+    np_image[:,:,2] = 128
+
+    thresholded_image = PIL.Image.fromarray(np_image, 'YCbCr').convert('RGB')
+    ctx.obj['result'] = thresholded_image
 
 
 @cli.command('blur')
