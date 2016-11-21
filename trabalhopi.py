@@ -17,24 +17,25 @@ def cli():
 
     Exemplo:
 
-        trabalhopi open -i digital1.jpg blur -s 3 save
-        trabalhopi open -i digital1.jpg blur -s 5 display
+    \b
+        dip open -i sample/digital1.jpg blur -r 3 save
+        dip open -i sample/digital1.jpg blur -r 5 display
     """
     pass
 
 
 @cli.command('open')
-@click.option('-i', '--image', 'image', type=click.Path(), help='Imagem a ser aberta.')
+@click.option('-i', '--input', 'input', type=click.Path(), help='Imagem a ser aberta.')
 @click.pass_context
-def open(ctx, image):
+def open(ctx, input):
     """Carrega uma imagem para processamento."""
     try:
-        click.echo('Abrindo "%s"' % image)
-        # img = scipy.misc.imread(image, False, 'RGB')
-        img = PIL.Image.open(image).convert('RGB')
+        click.echo('Abrindo "%s"' % input)
+        # img = scipy.misc.imread(input, False, 'RGB')
+        img = PIL.Image.open(input).convert('RGB')
         ctx.obj['result'] = img
     except Exception as e:
-        click.echo('Imagem não pode ser aberta "%s": %s' % (image, e), err=True)
+        click.echo('Imagem não pode ser aberta "%s": %s' % (input, e), err=True)
 
 
 @cli.command('display')
@@ -69,6 +70,7 @@ def save(ctx, output):
 @click.option('-m', '--mode', 'mode')
 @click.pass_context
 def colorspace(ctx, mode):
+    """Converte a imagem"""
     image = ctx.obj['result']
     try:
         converted_image = image.convert(mode)
@@ -235,26 +237,48 @@ def threshold(ctx, threshold, algorithm):
 
 @cli.command('convolve')
 @click.option('-a', '--axis', 'axis', default="xy", type=click.Choice(["x", "y", "xy"]))
-@click.option('-m', '--mode', 'mode', default="reflect", type=click.Choice(["reflect", "constant", "nearest", "mirror", "wrap"]))
-@click.option('-k', '--kernel', 'kernel', default=None, type=click.Choice(["gaussian", "prewitt", "sobel", "roberts", "laplace"]))
+@click.option('-m', '--mode', 'mode', default="reflect",
+              type=click.Choice(["reflect", "constant", "nearest", "mirror", "wrap"]))
+@click.option('-k', '--kernel', 'kernel', default=None,
+              type=click.Choice(["gaussian", "prewitt", "sobel", "roberts", "laplace"]))
 @click.option('-x', '--dimension-x', 'dimension_x', default=3)
 @click.option('-y', '--dimension-y', 'dimension_y', default=3)
 @click.option('-g', '--degree', 'degree', default=1)
+@click.option('-s', '--sigma', 'sigma', default=1)
 @click.pass_context
-def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree):
+def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
+    """Aplica o produto de convolução"""
     image = ctx.obj['result']
 
     np_image = np.array(image, dtype='float64')
 
-    if kernel == "prewitt":
+    if kernel == "gaussian":
+        dimension_x = 6*sigma
+        dimension_y = 6*sigma
+
+        Gx = np.linspace(-int(dimension_x / 2), int(dimension_x / 2), dimension_x)
+        Gx = np.exp((-(Gx ** 2) / (2 * (sigma ** 2))))
+        Gx /= Gx.sum()
+
+        # Gy = np.linspace(-int(dimension_y / 2), int(dimension_y / 2), dimension_y)
+        # Gy = np.exp((-(Gy ** 2) / (2 * (sigma ** 2))))
+        # Gy /= Gy.sum()
+
+        np_image = scipy.ndimage.filters.convolve1d(np_image, Gx, axis=0, mode=mode)
+        np_image = scipy.ndimage.filters.convolve1d(np_image, Gx, axis=1, mode=mode)
+        # np_image = scipy.ndimage.filters.convolve1d(np_image, Gy, axis=1, mode=mode)
+
+    elif kernel == "prewitt":
         Px = np.array([
-        [-1, 0, 1],
-        [-1, 0, 1],
-        [-1, 0, 1]])
+            [-1, 0, 1],
+            [-1, 0, 1],
+            [-1, 0, 1]
+        ])
         Py = np.array([
-        [-1, -1, -1],
-        [0, 0, 0],
-        [1, 1, 1]])
+            [-1, -1, -1],
+            [0, 0, 0],
+            [1, 1, 1]
+        ])
 
         for c in range(0, np_image.shape[2]):
             dx = scipy.ndimage.filters.convolve(np_image[:,:,c], Px, mode=mode)
@@ -265,13 +289,15 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree):
 
     elif kernel == "sobel":
         Sx = np.array([
-        [-1, 0, 1],
-        [-2, 0, 2],
-        [-1, 0, 1]])
+            [-1, 0, 1],
+            [-2, 0, 2],
+            [-1, 0, 1]
+        ])
         Sy = np.array([
-        [-1, -2, -1],
-        [0, 0, 0],
-        [1, 2, 1]])
+            [-1, -2, -1],
+            [0, 0, 0],
+            [1, 2, 1]
+        ])
 
         for c in range(0, np_image.shape[2]):
             dx = scipy.ndimage.filters.convolve(np_image[:,:,c], Sx, mode=mode)
@@ -282,11 +308,13 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree):
 
     elif kernel == "roberts":
         Rx = np.array([
-        [1, 0],
-        [0, -1]])
+            [1, 0],
+            [0, -1]
+        ])
         Ry = np.array([
-        [0, 1],
-        [-1, 0]])
+            [0, 1],
+            [-1, 0]
+        ])
 
         for c in range(0, np_image.shape[2]):
             dx = scipy.ndimage.filters.convolve(np_image[:,:,c], Rx, mode=mode)
@@ -297,9 +325,10 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree):
 
     elif kernel == "laplace":
         L = np.array([
-        [0, -1, 0],
-        [-1, 4, -1],
-        [0, -1, 0]])
+            [0, -1, 0],
+            [-1, 4, -1],
+            [0, -1, 0]
+        ])
 
         for c in range(0, np_image.shape[2]):
             np_image[:,:,c] = scipy.ndimage.filters.convolve(np_image[:,:,c], L, mode=mode)
@@ -309,39 +338,23 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree):
             np_image[:,:,c] *= 255.0 / max_value
 
     else:
-        weights = box = np.ones((dimension_x, dimension_y))
+        weights = box = np.ones(dimension_x)
         for g in range(0, degree - 1):
-            weights = scipy.signal.convolve2d(weights, box, mode="same")
+            weights = scipy.signal.convolve(weights, box, mode="same")
 
         weights = weights / weights.sum()
 
         if axis == "x":
-            np_image = scipy.ndimage.filters.convolve1d(np_image, weights[0], axis=0, mode=mode)
+            np_image = scipy.ndimage.filters.convolve1d(np_image, weights, axis=0, mode=mode)
         elif axis == "y":
-            np_image = scipy.ndimage.filters.convolve1d(np_image, weights[0], axis=1, mode=mode)
+            np_image = scipy.ndimage.filters.convolve1d(np_image, weights, axis=1, mode=mode)
         elif axis == "xy":
-            for c in range(0, np_image.shape[2]):
-                np_image[:,:,c] = scipy.ndimage.filters.convolve(np_image[:,:,c], weights, mode=mode)
+            np_image = scipy.ndimage.filters.convolve1d(np_image, weights, axis=0, mode=mode)
+            np_image = scipy.ndimage.filters.convolve1d(np_image, weights, axis=1, mode=mode)
 
     convolved_image = PIL.Image.fromarray(np_image.astype('uint8'))
 
     ctx.obj['result'] = convolved_image
-
-
-@cli.command('blur')
-@click.option('-r', '--radius', default=2, type=int,
-              help='Raio do filtro gaussiano.', show_default=True)
-@click.pass_context
-def blur(ctx, radius):
-    """Borra a imagem usando o filtro gaussiano."""
-    image = ctx.obj['result']
-    try:
-        click.echo('Aplicando filtro gaussiano com raio %s' % radius)
-        # blurred_image = scipy.ndimage.gaussian_filter(image, sigma=(sigma, sigma, 1))
-        blurred_image = image.filter(PIL.ImageFilter.GaussianBlur(radius))
-        ctx.obj['result'] = blurred_image
-    except Exception as e:
-        click.echo('Filtro não pode ser aplicado "%s": %s' % (image, e), err=True)
 
 
 if __name__ == "__main__":

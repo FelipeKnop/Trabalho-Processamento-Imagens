@@ -21,7 +21,7 @@ $ chmod +x trabalhopi.py
 ## Como contribuir
 
 Usar:
-- PEP 8 (exceto E231; E501 com 100 caracteres)
+- PEP 8 (exceto E231; E501 com 110 caracteres)
 - PEP 8 naming
 - PEP 257
 - Git LFS
@@ -89,15 +89,6 @@ Atualmente o único algoritmo disponível é o de Otsu.
 ```shell
 $ ./trabalhopi.py open -i "sample/digital1.jpg" threshold -t 128 display
 $ ./trabalhopi.py open -i "sample/digital1.jpg" threshold -a otsu display
-```
-
-### Filtros
-
-Alguns filtros podem ser aplicados através de seus respectivos comandos.
-Atualmente apenas o filtro **blur** está disponível e suporta a opção **-r** para especificar o raio.
-
-```shell
-$ ./trabalhopi.py open -i "sample/digital1.jpg" blur -r 50 display
 ```
 
 ### Estatísticas
