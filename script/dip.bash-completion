@@ -1,0 +1,67 @@
+#!/bin/bash
+
+function _is_option() {
+    [ $(echo ${1} | grep ^-) ] && return 0
+    return 1
+}
+
+function _get_arguments() {
+    dip ${1} --help | sed '1,/Options:/d' | grep -e "${2}" | grep -e "\[.*\]" | sed -e 's/.*\[//; s/].*//; s/|/ /g'
+}
+
+function _get_options() {
+    dip ${1} --help | sed '1,/Options:/d' | grep -oe " --*[^ ,]*" | tr -d " " | xargs echo -e
+}
+
+function _get_commands() {
+    dip | sed '1,/Commands:/d' | tr -s " " | cut -d " " -f 2 | xargs echo -e
+}
+
+function _get_current_command() {
+    local comp_cword=${1}
+    shift
+    local comp_words=(${@})
+    local cur prev cur_check prev_check
+
+    for i in $(seq ${comp_cword})
+    do
+        cur=${comp_words[-${i}]}
+        prev=${comp_words[-${i}-1]}
+        _is_option "${cur}"; cur_check=$?
+        _is_option "${prev}"; prev_check=$?
+        if [ ${cur_check} -ne 0 -a ${prev_check} -ne 0 ]
+        then
+            echo ${cur}
+            break
+        fi
+    done
+    return 0
+}
+
+function _dip() {
+    local cur prev cur_check prev_check cmd opts
+
+    COMPREPLY=()
+    cur=${COMP_WORDS[-1]}
+    prev=${COMP_WORDS[-2]}
+    _is_option "${cur}"; cur_check=$?
+    if [ ${cur_check} -eq 0 ]
+    then
+        cmd=$(_get_current_command ${COMP_CWORD} ${COMP_WORDS[@]})
+        opts=$(_get_options ${cmd})
+    else
+        _is_option "${prev}"; prev_check=$?
+        if [ ${prev_check} -eq 0 ]
+        then
+            cmd=$(_get_current_command ${COMP_CWORD} ${COMP_WORDS[@]})
+            opts=$(_get_arguments ${cmd} ${prev})
+        else
+            opts="$(_get_commands)"
+        fi
+    fi
+
+    COMPREPLY=( $(compgen -W "${opts}" -- ${COMP_WORDS[-1]}) )
+    return 0
+}
+
+complete -F _dip dip

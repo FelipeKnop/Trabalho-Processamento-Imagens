@@ -18,8 +18,8 @@ def cli():
     Exemplo:
 
     \b
-        dip open -i sample/digital1.jpg blur -r 3 save
-        dip open -i sample/digital1.jpg blur -r 5 display
+        dip open -i sample/digital1.jpg convolve -k gaussian -s 3 save
+        dip open -i sample/digital1.jpg convolve -k gaussian -s 5 display
     """
     pass
 

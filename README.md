@@ -15,7 +15,7 @@ No terminal execute os seguintes comandos:
 $ git lfs install
 $ git clone https://github.com/FelipeKnop/Trabalho-Processamento-Imagens.git
 $ cd Trabalho-Processamento-Imagens
-$ chmod +x trabalhopi.py
+# ./install.sh
 ```
 
 ## Como contribuir
