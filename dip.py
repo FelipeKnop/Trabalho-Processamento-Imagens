@@ -86,7 +86,7 @@ def display(ctx, phase, logarithm, center):
 # TODO(andre:2016-11-18): Permitir especificar o formato a ser salvo?
 # (atualmente o formato é deduzido pela a extensão do arquivo)
 @cli.command('save')
-@click.option('-o', '--output', 'output', default="output/temp.png", type=click.Path())
+@click.option('-o', '--output', 'output', default='output/temp.png', type=click.Path())
 @click.pass_context
 def save(ctx, output):
     """Salva a imagem em um arquivo."""
@@ -174,7 +174,7 @@ def snr(ctx, reference):
     noise = (diff**2).sum(axis=(0, 1))
 
     snr = 10 * (np.log(signal / noise) / np.log(10))
-    click.echo("Razão sinal-ruído: %s" % snr)
+    click.echo('Razão sinal-ruído: %s' % snr)
 
 
 @cli.command('gamma')
@@ -185,7 +185,7 @@ def gamma(ctx, c, gamma):
     """Aplica a transformação gamma: s = c*r^g."""
     image = ctx.obj['image']
 
-    click.echo("Aplicando transformação gamma")
+    click.echo('Aplicando transformação gamma')
 
     image = (c * 255 * (image / 255)**gamma).astype(np.uint8)
 
@@ -199,7 +199,7 @@ def histeq(ctx, bins):
     """Aplica a equalização de histograma."""
     image = ctx.obj['image']
 
-    click.echo("Aplicando equalização de histograma")
+    click.echo('Aplicando equalização de histograma')
 
     image = utils.convert_image(image, 'YCbCr')
 
@@ -223,11 +223,11 @@ def threshold(ctx, threshold, algorithm):
     """Aplica a binarização por limiarização."""
     image = ctx.obj['image']
 
-    click.echo("Aplicando binarização por limiarização")
+    click.echo('Aplicando binarização por limiarização')
 
     image = utils.convert_image(image, 'YCbCr')
 
-    if algorithm == "otsu":
+    if algorithm == 'otsu':
         histogram, _ = np.histogram(image[:,:,0], 256)
         P1 = histogram.cumsum()
 
@@ -261,11 +261,11 @@ def threshold(ctx, threshold, algorithm):
 
 
 @cli.command('convolve')
-@click.option('-a', '--axis', 'axis', default="xy", type=click.Choice(["x", "y", "xy"]))
-@click.option('-m', '--mode', 'mode', default="reflect",
-              type=click.Choice(["reflect", "constant", "nearest", "mirror", "wrap"]))
+@click.option('-a', '--axis', 'axis', default='xy', type=click.Choice(['x', 'y', 'xy']))
+@click.option('-m', '--mode', 'mode', default='reflect',
+              type=click.Choice(['reflect', 'constant', 'nearest', 'mirror', 'wrap']))
 @click.option('-k', '--kernel', 'kernel', default=None,
-              type=click.Choice(["gaussian", "prewitt", "sobel", "roberts", "laplace"]))
+              type=click.Choice(['gaussian', 'prewitt', 'sobel', 'roberts', 'laplace']))
 @click.option('-x', '--dimension-x', 'dimension_x', default=3)
 @click.option('-y', '--dimension-y', 'dimension_y', default=3)
 @click.option('-g', '--degree', 'degree', default=1)
@@ -275,11 +275,11 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
     """Aplica o produto de convolução"""
     image = ctx.obj['image']
 
-    click.echo("Aplicando produto de convolução")
+    click.echo('Aplicando produto de convolução')
 
     image = np.array(image, dtype='float64')
 
-    if kernel == "gaussian":
+    if kernel == 'gaussian':
         dimension_x = 6 * sigma
         # dimension_y = 6 * sigma
 
@@ -295,7 +295,7 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
         image = scipy.ndimage.filters.convolve1d(image, Gx, axis=1, mode=mode)
         # image = scipy.ndimage.filters.convolve1d(image, Gy, axis=1, mode=mode)
 
-    elif kernel == "prewitt":
+    elif kernel == 'prewitt':
         Px = np.array([
             [-1, 0, 1],
             [-1, 0, 1],
@@ -314,7 +314,7 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
             max_value = np.max(image[:,:,c])
             image[:,:,c] *= 255.0 / max_value
 
-    elif kernel == "sobel":
+    elif kernel == 'sobel':
         Sx = np.array([
             [-1, 0, 1],
             [-2, 0, 2],
@@ -333,7 +333,7 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
             max_value = np.max(image[:,:,c])
             image[:,:,c] *= 255.0 / max_value
 
-    elif kernel == "roberts":
+    elif kernel == 'roberts':
         Rx = np.array([
             [1, 0],
             [0, -1]
@@ -350,7 +350,7 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
             max_value = np.max(image[:,:,c])
             image[:,:,c] *= 255.0 / max_value
 
-    elif kernel == "laplace":
+    elif kernel == 'laplace':
         L = np.array([
             [0, -1, 0],
             [-1, 4, -1],
@@ -367,15 +367,15 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
     else:
         weights = box = np.ones(dimension_x)
         for g in range(0, degree - 1):
-            weights = scipy.signal.convolve(weights, box, mode="same")
+            weights = scipy.signal.convolve(weights, box, mode='same')
 
         weights = weights / weights.sum()
 
-        if axis == "x":
+        if axis == 'x':
             image = scipy.ndimage.filters.convolve1d(image, weights, axis=0, mode=mode)
-        elif axis == "y":
+        elif axis == 'y':
             image = scipy.ndimage.filters.convolve1d(image, weights, axis=1, mode=mode)
-        elif axis == "xy":
+        elif axis == 'xy':
             image = scipy.ndimage.filters.convolve1d(image, weights, axis=0, mode=mode)
             image = scipy.ndimage.filters.convolve1d(image, weights, axis=1, mode=mode)
 
@@ -390,15 +390,15 @@ def fourier(ctx, inverse, numpy):
     """Aplica a Tranformada Discreta de Fourier"""
     image = ctx.obj['image']
 
-    click.echo("Aplicando Transformada Discreta de Fourier")
+    click.echo('Aplicando Transformada Discreta de Fourier')
 
     if inverse:
-        out_image = np.empty_like(image, dtype="uint8")
+        out_image = np.empty_like(image, dtype='uint8')
         out_image[:,:,1] = np.real(image[:,:,1])
         out_image[:,:,2] = np.real(image[:,:,2])
 
         if numpy:
-            M, N, _= image.shape
+            M, N, _ = image.shape
             temp = np.fft.ifft2(image[:,:,0]) * M * N
         else:
             temp = utils.ifft2(image[:,:,0])
@@ -411,7 +411,7 @@ def fourier(ctx, inverse, numpy):
     else:
         image = utils.convert_image(image, 'YCbCr')
 
-        out_image = np.empty_like(image, dtype="complex")
+        out_image = np.empty_like(image, dtype='complex')
         out_image[:,:,1] = image[:,:,1]
         out_image[:,:,2] = image[:,:,2]
 
@@ -424,6 +424,43 @@ def fourier(ctx, inverse, numpy):
 
         ctx.obj['image'] = out_image
         ctx.obj['img_mode'] = 'spectrum'
+
+
+@cli.command('product')
+@click.option('-k', '--kernel', 'kernel', default=None,
+              type=click.Choice(['low-pass', 'band-pass', 'high-pass']))
+@click.option('-r', '--radius', 'radius', default=20)
+@click.option('-s', '--size', 'size', default=5)
+@click.pass_context
+def product(ctx, kernel, radius, size):
+    """Aplica o produto"""
+    image = ctx.obj['image']
+
+    M, N, _ = image.shape
+    xx, yy = np.indices((M, N))
+    xx -= int(M/2)
+    yy -= int(N/2)
+
+    filter = np.ones((M, N))
+
+    if kernel == 'low-pass':
+        mask = xx**2 + yy**2 > radius**2
+        filter[mask] = 0
+    elif kernel == 'high-pass':
+        mask = xx**2 + yy**2 < radius**2
+        filter[mask] = 0
+    elif kernel == 'band-pass':
+        mask1 = xx**2 + yy**2 < (radius - size/2)**2
+        mask2 = xx**2 + yy**2 > (radius + size/2)**2
+        filter[mask1] = 0
+        filter[mask2] = 0
+
+    filter = np.roll(filter, -int(M/2), 0)
+    filter = np.roll(filter, -int(N/2), 1)
+
+    image[:,:,0] *= filter
+
+    ctx.obj['image'] = image
 
 
 if __name__ == "__main__":
