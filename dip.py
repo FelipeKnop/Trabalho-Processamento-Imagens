@@ -402,5 +402,25 @@ def resize(ctx, scale, mode):
     ctx.obj['image'] = np.array(pil_image)
 
 
+@cli.command('misc')
+@click.option('-n', '--number', 'number', default=0)
+@click.option('-a', '--par-a', 'par_a', default=0, type=click.FLOAT)
+@click.option('-b', '--par-b', 'par_b', default=0, type=click.FLOAT)
+@click.pass_context
+def misc(ctx, number, par_a, par_b):
+    image = ctx.obj['image']
+
+    if number == 0:
+        # par_a = w
+        # par_b = sigma
+        click.echo(par_a)
+        click.echo(par_b)
+        gaussian_image = utils.convolve(image, 'xy', 'reflect', 'gaussian', 1, 1, 1, par_b)
+        image = (1 + par_a) * image - par_a * gaussian_image
+        image = np.clip(image, 0, 255).astype('uint8')
+
+    ctx.obj['image'] = image
+
+
 if __name__ == "__main__":
     cli(obj={})
