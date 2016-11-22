@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 
+import math
+
 import click
 # import matplotlib.pyplot as plt
 # import scipy.misc
 import scipy.ndimage
 import scipy.signal
 import PIL.Image
-import PIL.ImageFilter
 
 import numpy as np
+
+import utils
 
 
 @click.group(chain=True)
@@ -31,23 +34,53 @@ def open(ctx, input):
     """Carrega uma imagem para processamento."""
     try:
         click.echo('Abrindo "%s"' % input)
-        # img = scipy.misc.imread(input, False, 'RGB')
-        img = PIL.Image.open(input).convert('RGB')
-        ctx.obj['result'] = img
+        # scipy_image = scipy.misc.imread(input, False, 'RGB')
+        pil_image = PIL.Image.open(input).convert('RGB')
+        image = np.array(pil_image)
+        ctx.obj['image'] = image
+        ctx.obj['img_mode'] = 'RGB'
     except Exception as e:
         click.echo('Imagem não pode ser aberta "%s": %s' % (input, e), err=True)
 
 
 @cli.command('display')
+@click.option('-p', '--phase', 'phase', is_flag=True)
+@click.option('-l', '--logarithm', 'logarithm', is_flag=True)
+@click.option('-c', '--center', 'center', is_flag=True)
 @click.pass_context
-def display(ctx):
+def display(ctx, phase, logarithm, center):
     """Abre todas as imagens em um visualizador de imagens."""
-    image = ctx.obj['result']
+    image = ctx.obj['image']
+    img_mode = ctx.obj['img_mode']
+
     click.echo('Exibindo imagem')
+
     # matplotlib.pyplot.imshow(image)
     # matplotlib.pyplot.show()
-    image.show()
-    # ctx.obj['result'] = image
+    if img_mode == 'spectrum':
+        M, N, _ = image.shape
+
+        if phase:
+            show_image = np.arctan2(np.imag(image), np.real(image))[:,:,0]
+            show_image += math.pi
+            show_image *= 255 / (2 * math.pi)
+
+        else:
+            show_image = np.sqrt((np.real(image)**2 + np.imag(image)**2))[:,:,0]
+
+            # NOTE(andre:2016-11-21): http://homepages.inf.ed.ac.uk/rbf/HIPR2/pixlog.htm
+            if logarithm:
+                show_image = (255 / math.log(1 + np.abs(show_image).max())) * np.log(1 + np.abs(show_image))
+
+        if center:
+            show_image = np.roll(show_image, int(M/2), 0)
+            show_image = np.roll(show_image, int(N/2), 1)
+
+        pil_image = PIL.Image.fromarray(show_image)
+        pil_image.show()
+    else:
+        pil_image = PIL.Image.fromarray(image, img_mode)
+        pil_image.show()
 
 
 # TODO(andre:2016-11-18): Permitir especificar o formato a ser salvo?
@@ -57,10 +90,11 @@ def display(ctx):
 @click.pass_context
 def save(ctx, output):
     """Salva a imagem em um arquivo."""
-    image = ctx.obj['result']
+    image = ctx.obj['image']
     click.echo('Salvando imagem')
     # scipy.misc.imsave('output/temp.png', image)
-    image.save(output)
+    pil_image = PIL.Image.fromarray(image)
+    pil_image.save(output)
 
 
 # BUG(andre:2016-11-20): Alguns comandos não estão funcionando com imagens
@@ -69,12 +103,14 @@ def save(ctx, output):
 @cli.command('convert')
 @click.option('-m', '--mode', 'mode')
 @click.pass_context
-def colorspace(ctx, mode):
+def convert(ctx, mode):
     """Converte a imagem"""
-    image = ctx.obj['result']
+    image = ctx.obj['image']
+    img_mode = ctx.obj['img_mode']
     try:
-        converted_image = image.convert(mode)
-        ctx.obj['result'] = converted_image
+        converted_image = utils.convert_image(image, mode, from_mode=img_mode)
+        ctx.obj['image'] = converted_image
+        ctx.obj['img_mode'] = mode
     except Exception as e:
         click.echo('Imagem não pode ser convertida para "%s": %s' % (mode, e), err=True)
 
@@ -85,26 +121,24 @@ def colorspace(ctx, mode):
 @click.pass_context
 def mse(ctx, reference):
     """Calcula o erro quadrático médio entre duas imagens"""
-    image = ctx.obj['result']
+    image = ctx.obj['image']
 
     try:
         click.echo('Abrindo "%s"' % reference)
-        refimage = PIL.Image.open(reference).convert('RGB')
+        pil_refimage = PIL.Image.open(reference).convert('RGB')
+        refimage = np.array(pil_refimage)
     except Exception as e:
         click.echo('Imagem não pode ser aberta "%s": %s' % (reference, e), err=True)
 
-    np_image = np.array(image)
-    np_refimage = np.array(refimage)
-
-    size = np_image.shape
-    refsize = np_refimage.shape
+    size = image.shape
+    refsize = refimage.shape
 
     if size != refsize:
         click.echo('Imagem base possui tamanho diferente da imagem de referência')
         click.echo('%s != %s' % (size, refsize))
         return
 
-    diff = (np_image.astype(int) - np_refimage.astype(int))
+    diff = (image.astype(int) - refimage.astype(int))
     mse = (diff**2).mean(axis=(0, 1))
     click.echo("Erro quadrático medio: %s" % mse)
 
@@ -117,28 +151,26 @@ def mse(ctx, reference):
 @click.pass_context
 def snr(ctx, reference):
     """Calcula a razão sinal-ruído entre duas imagens"""
-    image = ctx.obj['result']
+    image = ctx.obj['image']
 
     try:
         click.echo('Abrindo "%s"' % reference)
-        refimage = PIL.Image.open(reference).convert('RGB')
+        pil_refimage = PIL.Image.open(reference).convert('RGB')
+        refimage = np.array(pil_refimage)
     except Exception as e:
         click.echo('Imagem não pode ser aberta "%s": %s' % (reference, e), err=True)
 
-    np_image = np.array(image)
-    np_refimage = np.array(refimage)
-
-    size = np_image.shape
-    refsize = np_refimage.shape
+    size = image.shape
+    refsize = refimage.shape
 
     if size != refsize:
         click.echo('Imagem base possui tamanho diferente da imagem de referência')
         click.echo('%s != %s' % (size, refsize))
         return
 
-    diff = (np_image.astype(int) - np_refimage.astype(int))
+    diff = (image.astype(int) - refimage.astype(int))
 
-    signal = (np_image.astype(int)**2).sum(axis=(0, 1))
+    signal = (image.astype(int)**2).sum(axis=(0, 1))
     noise = (diff**2).sum(axis=(0, 1))
 
     snr = 10 * (np.log(signal / noise) / np.log(10))
@@ -151,16 +183,13 @@ def snr(ctx, reference):
 @click.pass_context
 def gamma(ctx, c, gamma):
     """Aplica a transformação gamma: s = c*r^g."""
-    image = ctx.obj['result']
+    image = ctx.obj['image']
 
     click.echo("Aplicando transformação gamma")
 
-    np_image = np.array(image)
-    np_image = (c * 255 * (np_image / 255)**gamma).astype(np.uint8)
+    image = (c * 255 * (image / 255)**gamma).astype(np.uint8)
 
-    gamma_image = PIL.Image.fromarray(np_image)
-
-    ctx.obj['result'] = gamma_image
+    ctx.obj['image'] = image
 
 
 @cli.command('histeq')
@@ -168,41 +197,38 @@ def gamma(ctx, c, gamma):
 @click.pass_context
 def histeq(ctx, bins):
     """Aplica a equalização de histograma."""
-    image = ctx.obj['result']
+    image = ctx.obj['image']
 
     click.echo("Aplicando equalização de histograma")
 
-    ycbcr_image = image.convert('YCbCr')
-    np_image = np.array(ycbcr_image)
+    image = utils.convert_image(image, 'YCbCr')
 
-    channel = np_image[:,:,0]
+    channel = image[:,:,0]
 
     histogram, bins_ar = np.histogram(channel, bins)
     cdf = histogram.cumsum()
     cdf = 255 * cdf / cdf[-1]
 
     temp_image = np.interp(channel.flatten(), bins_ar[:-1], cdf)
-    np_image[:,:,0] = temp_image.reshape(channel.shape)
+    image[:,:,0] = temp_image.reshape(channel.shape)
 
-    eq_image = PIL.Image.fromarray(np_image, 'YCbCr').convert('RGB')
-    ctx.obj['result'] = eq_image
+    ctx.obj['image'] = utils.convert_image(image, 'RGB', from_mode='YCbCr')
 
 
 @cli.command('threshold')
 @click.option('-t', '--threshold', 'threshold', default=128)
-@click.option('-a', '--algorithm', 'algorithm', default=None, type=click.Choice(["otsu"]))
+@click.option('-a', '--algorithm', 'algorithm', default=None, type=click.Choice(['otsu']))
 @click.pass_context
 def threshold(ctx, threshold, algorithm):
     """Aplica a binarização por limiarização."""
-    image = ctx.obj['result']
+    image = ctx.obj['image']
 
     click.echo("Aplicando binarização por limiarização")
 
-    ycbcr_image = image.convert('YCbCr')
-    np_image = np.array(ycbcr_image)
+    image = utils.convert_image(image, 'YCbCr')
 
     if algorithm == "otsu":
-        histogram, _ = np.histogram(np_image[:,:,0], 256)
+        histogram, _ = np.histogram(image[:,:,0], 256)
         P1 = histogram.cumsum()
 
         av_intensity = np.arange(256) * histogram
@@ -224,15 +250,14 @@ def threshold(ctx, threshold, algorithm):
                 best_variance = interclass_variance
                 threshold = i
 
-    mask = np_image[:,:,0] <= threshold
-    np_image[:,:,0] = 255
-    np_image[mask,0] = 0
+    mask = image[:,:,0] <= threshold
+    image[:,:,0] = 255
+    image[mask,0] = 0
 
-    np_image[:,:,1] = 128
-    np_image[:,:,2] = 128
+    image[:,:,1] = 128
+    image[:,:,2] = 128
 
-    thresholded_image = PIL.Image.fromarray(np_image, 'YCbCr').convert('RGB')
-    ctx.obj['result'] = thresholded_image
+    ctx.obj['image'] = utils.convert_image(image, 'RGB', from_mode='YCbCr')
 
 
 @cli.command('convolve')
@@ -248,13 +273,15 @@ def threshold(ctx, threshold, algorithm):
 @click.pass_context
 def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
     """Aplica o produto de convolução"""
-    image = ctx.obj['result']
+    image = ctx.obj['image']
 
-    np_image = np.array(image, dtype='float64')
+    click.echo("Aplicando produto de convolução")
+
+    image = np.array(image, dtype='float64')
 
     if kernel == "gaussian":
-        dimension_x = 6*sigma
-        dimension_y = 6*sigma
+        dimension_x = 6 * sigma
+        # dimension_y = 6 * sigma
 
         Gx = np.linspace(-int(dimension_x / 2), int(dimension_x / 2), dimension_x)
         Gx = np.exp((-(Gx ** 2) / (2 * (sigma ** 2))))
@@ -264,9 +291,9 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
         # Gy = np.exp((-(Gy ** 2) / (2 * (sigma ** 2))))
         # Gy /= Gy.sum()
 
-        np_image = scipy.ndimage.filters.convolve1d(np_image, Gx, axis=0, mode=mode)
-        np_image = scipy.ndimage.filters.convolve1d(np_image, Gx, axis=1, mode=mode)
-        # np_image = scipy.ndimage.filters.convolve1d(np_image, Gy, axis=1, mode=mode)
+        image = scipy.ndimage.filters.convolve1d(image, Gx, axis=0, mode=mode)
+        image = scipy.ndimage.filters.convolve1d(image, Gx, axis=1, mode=mode)
+        # image = scipy.ndimage.filters.convolve1d(image, Gy, axis=1, mode=mode)
 
     elif kernel == "prewitt":
         Px = np.array([
@@ -280,12 +307,12 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
             [1, 1, 1]
         ])
 
-        for c in range(0, np_image.shape[2]):
-            dx = scipy.ndimage.filters.convolve(np_image[:,:,c], Px, mode=mode)
-            dy = scipy.ndimage.filters.convolve(np_image[:,:,c], Py, mode=mode)
-            np_image[:,:,c] = np.hypot(dx, dy)
-            max_value = np.max(np_image[:,:,c])
-            np_image[:,:,c] *= 255.0 / max_value
+        for c in range(0, image.shape[2]):
+            dx = scipy.ndimage.filters.convolve(image[:,:,c], Px, mode=mode)
+            dy = scipy.ndimage.filters.convolve(image[:,:,c], Py, mode=mode)
+            image[:,:,c] = np.hypot(dx, dy)
+            max_value = np.max(image[:,:,c])
+            image[:,:,c] *= 255.0 / max_value
 
     elif kernel == "sobel":
         Sx = np.array([
@@ -299,12 +326,12 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
             [1, 2, 1]
         ])
 
-        for c in range(0, np_image.shape[2]):
-            dx = scipy.ndimage.filters.convolve(np_image[:,:,c], Sx, mode=mode)
-            dy = scipy.ndimage.filters.convolve(np_image[:,:,c], Sy, mode=mode)
-            np_image[:,:,c] = np.hypot(dx, dy)
-            max_value = np.max(np_image[:,:,c])
-            np_image[:,:,c] *= 255.0 / max_value
+        for c in range(0, image.shape[2]):
+            dx = scipy.ndimage.filters.convolve(image[:,:,c], Sx, mode=mode)
+            dy = scipy.ndimage.filters.convolve(image[:,:,c], Sy, mode=mode)
+            image[:,:,c] = np.hypot(dx, dy)
+            max_value = np.max(image[:,:,c])
+            image[:,:,c] *= 255.0 / max_value
 
     elif kernel == "roberts":
         Rx = np.array([
@@ -316,12 +343,12 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
             [-1, 0]
         ])
 
-        for c in range(0, np_image.shape[2]):
-            dx = scipy.ndimage.filters.convolve(np_image[:,:,c], Rx, mode=mode)
-            dy = scipy.ndimage.filters.convolve(np_image[:,:,c], Ry, mode=mode)
-            np_image[:,:,c] = np.hypot(dx, dy)
-            max_value = np.max(np_image[:,:,c])
-            np_image[:,:,c] *= 255.0 / max_value
+        for c in range(0, image.shape[2]):
+            dx = scipy.ndimage.filters.convolve(image[:,:,c], Rx, mode=mode)
+            dy = scipy.ndimage.filters.convolve(image[:,:,c], Ry, mode=mode)
+            image[:,:,c] = np.hypot(dx, dy)
+            max_value = np.max(image[:,:,c])
+            image[:,:,c] *= 255.0 / max_value
 
     elif kernel == "laplace":
         L = np.array([
@@ -330,12 +357,12 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
             [0, -1, 0]
         ])
 
-        for c in range(0, np_image.shape[2]):
-            np_image[:,:,c] = scipy.ndimage.filters.convolve(np_image[:,:,c], L, mode=mode)
-            # np_image[:,:,c] -= np.min(np_image[:,:,c])
-            np_image[:,:,c] = np.absolute(np_image[:,:,c])
-            max_value = np.max(np_image[:,:,c])
-            np_image[:,:,c] *= 255.0 / max_value
+        for c in range(0, image.shape[2]):
+            image[:,:,c] = scipy.ndimage.filters.convolve(image[:,:,c], L, mode=mode)
+            # image[:,:,c] -= np.min(image[:,:,c])
+            image[:,:,c] = np.absolute(image[:,:,c])
+            max_value = np.max(image[:,:,c])
+            image[:,:,c] *= 255.0 / max_value
 
     else:
         weights = box = np.ones(dimension_x)
@@ -345,16 +372,58 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
         weights = weights / weights.sum()
 
         if axis == "x":
-            np_image = scipy.ndimage.filters.convolve1d(np_image, weights, axis=0, mode=mode)
+            image = scipy.ndimage.filters.convolve1d(image, weights, axis=0, mode=mode)
         elif axis == "y":
-            np_image = scipy.ndimage.filters.convolve1d(np_image, weights, axis=1, mode=mode)
+            image = scipy.ndimage.filters.convolve1d(image, weights, axis=1, mode=mode)
         elif axis == "xy":
-            np_image = scipy.ndimage.filters.convolve1d(np_image, weights, axis=0, mode=mode)
-            np_image = scipy.ndimage.filters.convolve1d(np_image, weights, axis=1, mode=mode)
+            image = scipy.ndimage.filters.convolve1d(image, weights, axis=0, mode=mode)
+            image = scipy.ndimage.filters.convolve1d(image, weights, axis=1, mode=mode)
 
-    convolved_image = PIL.Image.fromarray(np_image.astype('uint8'))
+    ctx.obj['image'] = image.astype('uint8')
 
-    ctx.obj['result'] = convolved_image
+
+@cli.command('fourier')
+@click.option('-i', '--inverse', 'inverse', is_flag=True)
+@click.option('-n', '--numpy', 'numpy', is_flag=True)
+@click.pass_context
+def fourier(ctx, inverse, numpy):
+    """Aplica a Tranformada Discreta de Fourier"""
+    image = ctx.obj['image']
+
+    click.echo("Aplicando Transformada Discreta de Fourier")
+
+    if inverse:
+        out_image = np.empty_like(image, dtype="uint8")
+        out_image[:,:,1] = np.real(image[:,:,1])
+        out_image[:,:,2] = np.real(image[:,:,2])
+
+        if numpy:
+            M, N, _= image.shape
+            temp = np.fft.ifft2(image[:,:,0]) * M * N
+        else:
+            temp = utils.ifft2(image[:,:,0])
+
+        out_image[:,:,0] = np.real(temp)
+
+        ctx.obj['image'] = utils.convert_image(out_image, 'RGB', from_mode='YCbCr')
+        ctx.obj['img_mode'] = 'RGB'
+
+    else:
+        image = utils.convert_image(image, 'YCbCr')
+
+        out_image = np.empty_like(image, dtype="complex")
+        out_image[:,:,1] = image[:,:,1]
+        out_image[:,:,2] = image[:,:,2]
+
+        if numpy:
+            temp = np.fft.ifft2(image[:,:,0])
+        else:
+            temp = utils.fft2(image[:,:,0])
+
+        out_image[:,:,0] = temp
+
+        ctx.obj['image'] = out_image
+        ctx.obj['img_mode'] = 'spectrum'
 
 
 if __name__ == "__main__":

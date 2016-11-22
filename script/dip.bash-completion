@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# https://debian-administration.org/article/316/An_introduction_to_bash_completion_part_1
+# https://debian-administration.org/article/317/An_introduction_to_bash_completion_part_2
+
 function _is_option() {
     [ $(echo ${1} | grep ^-) ] && return 0
     return 1
@@ -54,6 +57,14 @@ function _dip() {
         if [ ${prev_check} -eq 0 ]
         then
             cmd=$(_get_current_command ${COMP_CWORD} ${COMP_WORDS[@]})
+            [[ ${cmd} == "open" && ( ${prev} == "-i" || ${prev} == "--input" ) ]] && {
+                COMPREPLY=( $(compgen -f ${cur}) )
+                return 0
+            }
+            [[ ${cmd} == "save" && ( ${prev} == "-o" || ${prev} == "--output" ) ]] && {
+                COMPREPLY=( $(compgen -f ${cur}) )
+                return 0
+            }
             opts=$(_get_arguments ${cmd} ${prev})
         else
             opts="$(_get_commands)"
