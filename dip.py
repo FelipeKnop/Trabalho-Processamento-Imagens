@@ -277,109 +277,9 @@ def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
 
     click.echo('Aplicando produto de convolução')
 
-    image = np.array(image, dtype='float64')
+    image = utils.convolve(image, axis, mode, kernel, dimension_x, dimension_y, degree, sigma)
 
-    if kernel == 'gaussian':
-        dimension_x = 6 * sigma
-        # dimension_y = 6 * sigma
-
-        Gx = np.linspace(-int(dimension_x / 2), int(dimension_x / 2), dimension_x)
-        Gx = np.exp((-(Gx ** 2) / (2 * (sigma ** 2))))
-        Gx /= Gx.sum()
-
-        # Gy = np.linspace(-int(dimension_y / 2), int(dimension_y / 2), dimension_y)
-        # Gy = np.exp((-(Gy ** 2) / (2 * (sigma ** 2))))
-        # Gy /= Gy.sum()
-
-        image = scipy.ndimage.filters.convolve1d(image, Gx, axis=0, mode=mode)
-        image = scipy.ndimage.filters.convolve1d(image, Gx, axis=1, mode=mode)
-        # image = scipy.ndimage.filters.convolve1d(image, Gy, axis=1, mode=mode)
-
-    elif kernel == 'prewitt':
-        Px = np.array([
-            [-1, 0, 1],
-            [-1, 0, 1],
-            [-1, 0, 1]
-        ])
-        Py = np.array([
-            [-1, -1, -1],
-            [0, 0, 0],
-            [1, 1, 1]
-        ])
-
-        for c in range(0, image.shape[2]):
-            dx = scipy.ndimage.filters.convolve(image[:,:,c], Px, mode=mode)
-            dy = scipy.ndimage.filters.convolve(image[:,:,c], Py, mode=mode)
-            image[:,:,c] = np.hypot(dx, dy)
-            max_value = np.max(image[:,:,c])
-            image[:,:,c] *= 255.0 / max_value
-
-    elif kernel == 'sobel':
-        Sx = np.array([
-            [-1, 0, 1],
-            [-2, 0, 2],
-            [-1, 0, 1]
-        ])
-        Sy = np.array([
-            [-1, -2, -1],
-            [0, 0, 0],
-            [1, 2, 1]
-        ])
-
-        for c in range(0, image.shape[2]):
-            dx = scipy.ndimage.filters.convolve(image[:,:,c], Sx, mode=mode)
-            dy = scipy.ndimage.filters.convolve(image[:,:,c], Sy, mode=mode)
-            image[:,:,c] = np.hypot(dx, dy)
-            max_value = np.max(image[:,:,c])
-            image[:,:,c] *= 255.0 / max_value
-
-    elif kernel == 'roberts':
-        Rx = np.array([
-            [1, 0],
-            [0, -1]
-        ])
-        Ry = np.array([
-            [0, 1],
-            [-1, 0]
-        ])
-
-        for c in range(0, image.shape[2]):
-            dx = scipy.ndimage.filters.convolve(image[:,:,c], Rx, mode=mode)
-            dy = scipy.ndimage.filters.convolve(image[:,:,c], Ry, mode=mode)
-            image[:,:,c] = np.hypot(dx, dy)
-            max_value = np.max(image[:,:,c])
-            image[:,:,c] *= 255.0 / max_value
-
-    elif kernel == 'laplace':
-        L = np.array([
-            [0, -1, 0],
-            [-1, 4, -1],
-            [0, -1, 0]
-        ])
-
-        for c in range(0, image.shape[2]):
-            image[:,:,c] = scipy.ndimage.filters.convolve(image[:,:,c], L, mode=mode)
-            # image[:,:,c] -= np.min(image[:,:,c])
-            image[:,:,c] = np.absolute(image[:,:,c])
-            max_value = np.max(image[:,:,c])
-            image[:,:,c] *= 255.0 / max_value
-
-    else:
-        weights = box = np.ones(dimension_x)
-        for g in range(0, degree - 1):
-            weights = scipy.signal.convolve(weights, box, mode='same')
-
-        weights = weights / weights.sum()
-
-        if axis == 'x':
-            image = scipy.ndimage.filters.convolve1d(image, weights, axis=0, mode=mode)
-        elif axis == 'y':
-            image = scipy.ndimage.filters.convolve1d(image, weights, axis=1, mode=mode)
-        elif axis == 'xy':
-            image = scipy.ndimage.filters.convolve1d(image, weights, axis=0, mode=mode)
-            image = scipy.ndimage.filters.convolve1d(image, weights, axis=1, mode=mode)
-
-    ctx.obj['image'] = image.astype('uint8')
+    ctx.obj['image'] = image
 
 
 @cli.command('fourier')
@@ -461,6 +361,45 @@ def product(ctx, kernel, radius, size):
     image[:,:,0] *= filter
 
     ctx.obj['image'] = image
+
+
+@cli.command('resize')
+@click.option('-s', '--scale', 'scale', default=1, type=click.FLOAT)
+@click.option('-m', '--mode', 'mode', default=None,
+              type=click.Choice(['area', 'nearest', 'bilinear', 'bicubic']))
+@click.pass_context
+def resize(ctx, scale, mode):
+    image = ctx.obj['image']
+
+    M, N, _ = image.shape
+    pil_image = PIL.Image.fromarray(image)
+    new_size = (int(N*scale), int(M*scale))
+
+    # Amostragem
+    if scale < 1:
+        if mode == 'nearest':
+            pil_image = pil_image.resize(new_size, PIL.Image.NEAREST)
+
+        # if mode == 'area':
+        else:
+            mask_size = int(1/scale)
+            blurred_image = utils.convolve(pil_image, 'xy', 'reflect', None, mask_size, mask_size, 3, 1)
+            pil_image = PIL.Image.fromarray(blurred_image)
+            pil_image = pil_image.resize(new_size, PIL.Image.NEAREST)
+
+    # Reconstrução
+    elif scale > 1:
+        if mode == 'bicubic':
+            pil_image = pil_image.resize(new_size, PIL.Image.BICUBIC)
+
+        elif mode == 'nearest':
+            pil_image = pil_image.resize(new_size, PIL.Image.NEAREST)
+
+        # elif mode == 'bilinear':
+        else:
+            pil_image = pil_image.resize(new_size, PIL.Image.BILINEAR)
+
+    ctx.obj['image'] = np.array(pil_image)
 
 
 if __name__ == "__main__":
