@@ -24,8 +24,8 @@ def fft2(image):
     m, k = np.meshgrid(temp_m, temp_m)
     n, l = np.meshgrid(temp_n, temp_n)
 
-    Wm = (1 / M) * np.exp(-1j * 2 * math.pi * m * k / M)
-    Wn = (1 / N) * np.exp(-1j * 2 * math.pi * n * l / N)
+    Wm = np.exp(-1j * 2 * math.pi * m * k / M)
+    Wn = np.exp(-1j * 2 * math.pi * n * l / N)
 
     return np.matmul(np.matmul(Wm, image), Wn)
 
@@ -38,8 +38,8 @@ def ifft2(image):
     m, k = np.meshgrid(temp_m, temp_m)
     n, l = np.meshgrid(temp_n, temp_n)
 
-    Wm = np.exp(1j * 2 * math.pi * m * k / M)
-    Wn = np.exp(1j * 2 * math.pi * n * l / N)
+    Wm = (1 / M) * np.exp(1j * 2 * math.pi * m * k / M)
+    Wn = (1 / N) * np.exp(1j * 2 * math.pi * n * l / N)
 
     return np.matmul(np.matmul(Wm, image), Wn)
 

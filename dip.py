@@ -78,6 +78,7 @@ def display(ctx, phase, logarithm, center):
 
         pil_image = PIL.Image.fromarray(show_image)
         pil_image.show()
+
     else:
         pil_image = PIL.Image.fromarray(image, img_mode)
         pil_image.show()
@@ -87,14 +88,43 @@ def display(ctx, phase, logarithm, center):
 # (atualmente o formato é deduzido pela a extensão do arquivo)
 @cli.command('save')
 @click.option('-o', '--output', 'output', default='output/temp.png', type=click.Path())
+@click.option('-p', '--phase', 'phase', is_flag=True)
+@click.option('-l', '--logarithm', 'logarithm', is_flag=True)
+@click.option('-c', '--center', 'center', is_flag=True)
 @click.pass_context
-def save(ctx, output):
+def save(ctx, output, phase, logarithm, center):
     """Salva a imagem em um arquivo."""
     image = ctx.obj['image']
+    img_mode = ctx.obj['img_mode']
+
     click.echo('Salvando imagem')
     # scipy.misc.imsave('output/temp.png', image)
-    pil_image = PIL.Image.fromarray(image)
-    pil_image.save(output)
+
+    if img_mode == 'spectrum':
+        M, N, _ = image.shape
+
+        if phase:
+            show_image = np.arctan2(np.imag(image), np.real(image))[:,:,0]
+            show_image += math.pi
+            show_image *= 255 / (2 * math.pi)
+
+        else:
+            show_image = np.sqrt((np.real(image)**2 + np.imag(image)**2))[:,:,0]
+
+            # NOTE(andre:2016-11-21): http://homepages.inf.ed.ac.uk/rbf/HIPR2/pixlog.htm
+            if logarithm:
+                show_image = (255 / math.log(1 + np.abs(show_image).max())) * np.log(1 + np.abs(show_image))
+
+        if center:
+            show_image = np.roll(show_image, int(M/2), 0)
+            show_image = np.roll(show_image, int(N/2), 1)
+
+        pil_image = PIL.Image.fromarray(show_image.astype('uint8'))
+        pil_image.save(output)
+
+    else:
+        pil_image = PIL.Image.fromarray(image)
+        pil_image.save(output)
 
 
 # BUG(andre:2016-11-20): Alguns comandos não estão funcionando com imagens
@@ -139,7 +169,7 @@ def mse(ctx, reference):
         return
 
     diff = (image.astype(int) - refimage.astype(int))
-    mse = (diff**2).mean(axis=(0, 1))
+    mse = (diff**2).mean()
     click.echo("Erro quadrático medio: %s" % mse)
 
 
@@ -170,8 +200,11 @@ def snr(ctx, reference):
 
     diff = (image.astype(int) - refimage.astype(int))
 
-    signal = (image.astype(int)**2).sum(axis=(0, 1))
-    noise = (diff**2).sum(axis=(0, 1))
+    signal = (image.astype(int)**2).sum()
+    noise = (diff**2).sum()
+
+    click.echo(signal)
+    click.echo(noise)
 
     snr = 10 * (np.log(signal / noise) / np.log(10))
     click.echo('Razão sinal-ruído: %s' % snr)
@@ -269,7 +302,7 @@ def threshold(ctx, threshold, algorithm):
 @click.option('-x', '--dimension-x', 'dimension_x', default=3)
 @click.option('-y', '--dimension-y', 'dimension_y', default=3)
 @click.option('-g', '--degree', 'degree', default=1)
-@click.option('-s', '--sigma', 'sigma', default=1)
+@click.option('-s', '--sigma', 'sigma', default=1, type=click.FLOAT)
 @click.pass_context
 def convolve(ctx, axis, mode, kernel, dimension_x, dimension_y, degree, sigma):
     """Aplica o produto de convolução"""
@@ -292,14 +325,15 @@ def fourier(ctx, inverse, numpy):
 
     click.echo('Aplicando Transformada Discreta de Fourier')
 
+    M, N, _ = image.shape
+
     if inverse:
         out_image = np.empty_like(image, dtype='uint8')
         out_image[:,:,1] = np.real(image[:,:,1])
         out_image[:,:,2] = np.real(image[:,:,2])
 
         if numpy:
-            M, N, _ = image.shape
-            temp = np.fft.ifft2(image[:,:,0]) * M * N
+            temp = np.fft.ifft2(image[:,:,0])
         else:
             temp = utils.ifft2(image[:,:,0])
 
@@ -316,7 +350,7 @@ def fourier(ctx, inverse, numpy):
         out_image[:,:,2] = image[:,:,2]
 
         if numpy:
-            temp = np.fft.ifft2(image[:,:,0])
+            temp = np.fft.fft2(image[:,:,0])
         else:
             temp = utils.fft2(image[:,:,0])
 
@@ -362,7 +396,7 @@ def product(ctx, kernel, radius, size):
 
     ctx.obj['image'] = image
 
-
+# Sampling: http://www.cs.tau.ac.il/~dcor/Graphics/adv-slides/sampling05.pdf
 @cli.command('resize')
 @click.option('-s', '--scale', 'scale', default=1, type=click.FLOAT)
 @click.option('-m', '--mode', 'mode', default=None,
