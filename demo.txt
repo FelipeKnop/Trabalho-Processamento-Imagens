@@ -1,0 +1,96 @@
+Transformações de espaço de cor
+
+   Correção gamma
+
+      ./dip.py open -i sample/demo1-1.jpg display gamma -g 2.2 display save -o output/demo1-1a.jpg
+
+   Equalização de histograma
+
+      ./dip.py open -i sample/demo1-2.jpg display histeq display save -o output/demo1-2a.jpg
+
+   Binarização por limiarização
+
+      ./dip.py open -i sample/demo1-3.jpg display threshold -t 128 display save -o output/demo1-3a.jpg
+      ./dip.py open -i sample/demo1-3.jpg display threshold -a otsu display save -o output/demo1-3a.jpg
+
+
+Teorema da amostragem de Shannon-Whitaker
+
+   ./dip.py create -n 1 -a 0.125 display save -o output/demo2-1a.jpg fourier display -c save -co output/demo2-1b.jpg
+   ./dip.py create -n 1 -a 0.25 display save -o output/demo2-2a.jpg fourier display -c save -co output/demo2-2b.jpg
+   ./dip.py create -n 1 -a 0.5 display save -o output/demo2-3a.jpg fourier display -c save -co output/demo2-3b.jpg
+   ./dip.py create -n 1 -a 0.75 display save -o output/demo2-4a.jpg fourier display -c save -co output/demo2-4b.jpg
+   ./dip.py create -n 1 -a 1 display save -o output/demo2-5a.jpg fourier display -c save -co output/demo2-5b.jpg
+   ./dip.py create -n 1 -a 2 display save -o output/demo2-6a.jpg fourier display -c save -co output/demo2-6b.jpg
+
+
+Filtro de borramento e realce
+
+   ./dip.py open -i sample/demo3-1.jpg misc -n 0 -a -1 -b 5 display save -o output/demo3-1a.jpg
+   ./dip.py open -i sample/demo3-1.jpg misc -n 0 -a 1 -b 5 display save -o output/demo3-1b.jpg
+   ./dip.py open -i sample/demo3-1.jpg misc -n 0 -a -1 -b 10 display save -o output/demo3-2a.jpg
+   ./dip.py open -i sample/demo3-1.jpg misc -n 0 -a 1 -b 10 display save -o output/demo3-2b.jpg
+   ./dip.py open -i sample/demo3-1.jpg misc -n 0 -a -1 -b 30 display save -o output/demo3-3a.jpg
+   ./dip.py open -i sample/demo3-1.jpg misc -n 0 -a 1 -b 30 display save -o output/demo3-3b.jpg
+
+
+Eficácia da transformada de Fourier
+
+   Minha implementação
+
+      ./dip.py open -i sample/digital1.jpg fourier fourier -i mse -r sample/digital1.jpg
+         Erro quadrático medio (MSE): 3.7640851659
+
+      ./dip.py open -i sample/digital1.jpg fourier fourier -i snr -r sample/digital1.jpg
+         Razão sinal-ruído (SNR): 37.3322819381
+
+   Implementação da Numpy
+
+      ./dip.py open -i sample/digital1.jpg fourier -n fourier -in mse -r sample/digital1.jpg
+         Erro quadrático medio (MSE): 3.53430925283
+
+      ./dip.py open -i sample/digital1.jpg fourier -n fourier -in snr -r sample/digital1.jpg
+         Razão sinal-ruído (SNR): 37.6138760228
+
+Amostragem
+
+   ./dip.py open -i sample/demo5-1.jpg resize -s 0.1 -m nearest save -o output/demo5-1a.png fourier save -co output/demo5-1b.png
+   ./dip.py open -i sample/demo5-1.jpg resize -s 0.1 -m area save -o output/demo5-2a.png fourier save -co output/demo5-2b.png
+
+Reconstrução
+
+   ./dip.py open -i sample/demo6-1.jpg resize -s 10 -m nearest save -o output/demo6-1a.png fourier save -co output/demo6-1b.png save -clo output/demo6-1c.png
+   ./dip.py open -i sample/demo6-1.jpg resize -s 10 -m bilinear save -o output/demo6-2a.png fourier save -co output/demo6-2b.png save -clo output/demo6-2c.png
+   ./dip.py open -i sample/demo6-1.jpg resize -s 10 -m bicubic save -o output/demo6-3a.png fourier save -co output/demo6-3b.png save -clo output/demo6-3c.png
+
+Filtros
+
+   Domínio do espaço
+
+      Filtro polinomial
+         ./dip.py open -i sample/demo7-1.jpg convolve -x 11 -y 11 -g 4 display save -o output/demo7-1a.jpg
+
+      Filtro gaussiano
+         ./dip.py open -i sample/demo7-1.jpg convolve -k gaussian -s 5 display save -o output/demo7-1b.jpg
+
+      Filtro Prewitt
+         ./dip.py open -i sample/demo7-2.jpg convolve -k prewitt display save -o output/demo7-1c.jpg
+
+      Filtro Sobel
+         ./dip.py open -i sample/demo7-2.jpg convolve -k sobel display save -o output/demo7-1d.jpg
+
+      Filtro Roberts
+         ./dip.py open -i sample/demo7-2.jpg convolve -k roberts display save -o output/demo7-1e.jpg
+
+      Filtro Laplaciano
+         ./dip.py open -i sample/demo7-2.jpg convolve -k laplace display save -o output/demo7-1f.jpg
+
+   Domínio da frequênca
+      Filtro passa-baixa ideal
+         ./dip.py open -i sample/demo7-3.jpg display fourier product -k low-pass -r 10 fourier -i display save -o output/demo7-2a.jpg
+
+      Filtro passa-banda ideal
+         ./dip.py open -i sample/demo7-3.jpg display fourier product -k band-pass -r 15 -s 5 fourier -i display save -o output/demo7-2b.jpg
+
+      Filtro passa-alta ideal
+         ./dip.py open -i sample/demo7-3.jpg display fourier product -k high-pass -r 20 fourier -i display save -o output/demo7-2c.jpg
