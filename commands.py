@@ -209,19 +209,13 @@ def convolve(image, axis, mode, kernel, dimension_x, dimension_y, degree, sigma)
 
     if kernel == 'gaussian':
         dimension_x = 6 * sigma
-        # dimension_y = 6 * sigma
 
         Gx = np.linspace(-int(dimension_x / 2), int(dimension_x / 2), dimension_x)
         Gx = np.exp((-(Gx ** 2) / (2 * (sigma ** 2))))
         Gx /= Gx.sum()
 
-        # Gy = np.linspace(-int(dimension_y / 2), int(dimension_y / 2), dimension_y)
-        # Gy = np.exp((-(Gy ** 2) / (2 * (sigma ** 2))))
-        # Gy /= Gy.sum()
-
         image = scipy.ndimage.filters.convolve1d(image, Gx, axis=0, mode=mode)
         image = scipy.ndimage.filters.convolve1d(image, Gx, axis=1, mode=mode)
-        # image = scipy.ndimage.filters.convolve1d(image, Gy, axis=1, mode=mode)
 
     elif kernel == 'prewitt':
         Px = np.array([
@@ -287,25 +281,31 @@ def convolve(image, axis, mode, kernel, dimension_x, dimension_y, degree, sigma)
 
         for c in range(0, image.shape[2]):
             image[:,:,c] = scipy.ndimage.filters.convolve(image[:,:,c], L, mode=mode)
-            # image[:,:,c] -= np.min(image[:,:,c])
-            image[:,:,c] = np.absolute(image[:,:,c])
-            max_value = np.max(image[:,:,c])
-            image[:,:,c] *= 255.0 / max_value
+            # image[:,:,c] = np.absolute(image[:,:,c])
+            # max_value = np.max(image[:,:,c])
+            # image[:,:,c] *= 255.0 / max_value
+            image[:,:,c] = image[:,:,c] * (127 / np.max(np.absolute(image[:,:,c]))) + 127
 
     else:
-        weights = box = np.ones(dimension_x)
+        weights_x = box_x = np.ones(dimension_x)
         for g in range(0, degree - 1):
-            weights = scipy.signal.convolve(weights, box, mode='same')
+            weights_x = scipy.signal.convolve(weights_x, box_x, mode='full')
 
-        weights = weights / weights.sum()
+        weights_x = weights_x / weights_x.sum()
+
+        weights_y = box_y = np.ones(dimension_y)
+        for g in range(0, degree - 1):
+            weights_y = scipy.signal.convolve(weights_y, box_y, mode='full')
+
+        weights_y = weights_y / weights_y.sum()
 
         if axis == 'x':
-            image = scipy.ndimage.filters.convolve1d(image, weights, axis=0, mode=mode)
+            image = scipy.ndimage.filters.convolve1d(image, weights_x, axis=0, mode=mode)
         elif axis == 'y':
-            image = scipy.ndimage.filters.convolve1d(image, weights, axis=1, mode=mode)
+            image = scipy.ndimage.filters.convolve1d(image, weights_y, axis=1, mode=mode)
         elif axis == 'xy':
-            image = scipy.ndimage.filters.convolve1d(image, weights, axis=0, mode=mode)
-            image = scipy.ndimage.filters.convolve1d(image, weights, axis=1, mode=mode)
+            image = scipy.ndimage.filters.convolve1d(image, weights_x, axis=0, mode=mode)
+            image = scipy.ndimage.filters.convolve1d(image, weights_y, axis=1, mode=mode)
 
     return image.astype('uint8')
 
