@@ -447,10 +447,20 @@ def compress(image, img_mode, output):
     fourier_image = fourier(image, img_mode, False, False)
 
     Y = fourier_image[:,:,0]
-    Ym = np.sqrt((Y.real)**2 + (Y.imag)**2) / 4000
+    Ym = np.sqrt((Y.real)**2 + (Y.imag)**2) / 10000
     Yp = (np.arctan2(Y.imag, Y.real) + math.pi) * 255 / (2 * math.pi) / 4
-    Cb = fourier_image[:,:,1] / 4
-    Cr = fourier_image[:,:,2] / 4
+
+    Cb00 = fourier_image[::2,::2,1] / 4
+    Cb01 = fourier_image[1::2,::2,1] / 4
+    Cb10 = fourier_image[::2,1::2,1] / 4
+    Cb11 = fourier_image[1::2,1::2,1] / 4
+    Cb = (Cb00 + Cb01 + Cb10 + Cb11) / 4
+
+    Cr00 = fourier_image[::2,::2,2] / 4
+    Cr01 = fourier_image[1::2,::2,2] / 4
+    Cr10 = fourier_image[::2,1::2,2] / 4
+    Cr11 = fourier_image[1::2,1::2,2] / 4
+    Cr = (Cr00 + Cr01 + Cr10 + Cr11) / 4
 
     # if center:
     #     show_image = np.roll(show_image, int(M/2), 0)
@@ -528,10 +538,10 @@ def decompress(input):
 
     Ym = utils.matrix_from_spiral(Ym, shape[0], shape[1])
     Yp = utils.matrix_from_spiral(Yp, shape[0], shape[1])
-    Cb = utils.matrix_from_spiral(Cb, shape[0], shape[1])
-    Cr = utils.matrix_from_spiral(Cr, shape[0], shape[1])
+    Cb = utils.matrix_from_spiral(Cb, int(shape[0]/2), int(shape[1]/2))
+    Cr = utils.matrix_from_spiral(Cr, int(shape[0]/2), int(shape[1]/2))
 
-    Ym = Ym * 4000
+    Ym = Ym * 10000
     Yp = (Yp * ((2 * math.pi) / 255) * 4) - math.pi
     Y = ((Ym * np.cos(Yp)) + (Ym * np.sin(Yp)) * 1j).reshape(shape)
     Cb = Cb * 4
@@ -539,7 +549,15 @@ def decompress(input):
 
     decoded_image = np.empty((shape[0], shape[1], 3), dtype='complex')
     decoded_image[:,:,0] = Y
-    decoded_image[:,:,1] = Cb
-    decoded_image[:,:,2] = Cr
+
+    decoded_image[::2,::2,1] = Cb
+    decoded_image[1::2,::2,1] = Cb
+    decoded_image[::2,1::2,1] = Cb
+    decoded_image[1::2,1::2,1] = Cb
+
+    decoded_image[::2,::2,2] = Cr
+    decoded_image[1::2,::2,2] = Cr
+    decoded_image[::2,1::2,2] = Cr
+    decoded_image[1::2,1::2,2] = Cr
 
     return fourier(decoded_image, 'spectrum', True, False)
