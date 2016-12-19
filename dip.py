@@ -32,7 +32,7 @@ def cli():
 @click.pass_context
 def open_cmd(ctx, input):
     """Carrega uma imagem para processamento."""
-    image = open(input)
+    image = open_image(input)
 
     ctx.obj['image'] = image
     ctx.obj['img_mode'] = 'RGB'
@@ -98,7 +98,7 @@ def convert_cmd(ctx, mode):
 def mse_cmd(ctx, reference):
     """Calcula o erro quadrático médio entre duas imagens"""
     image = ctx.obj['image']
-    image_ref = open(reference)
+    image_ref = open_image(reference)
 
     result_mse = mse(image, image_ref)
 
@@ -114,7 +114,7 @@ def mse_cmd(ctx, reference):
 def snr_cmd(ctx, reference):
     """Calcula a razão sinal-ruído entre duas imagens"""
     image = ctx.obj['image']
-    image_ref = open(reference)
+    image_ref = open_image(reference)
 
     result_snr = snr(image, image_ref)
 
@@ -197,38 +197,11 @@ def fourier_cmd(ctx, inverse, numpy):
 
     click.echo('Aplicando Transformada Discreta de Fourier')
 
-    M, N, _ = image.shape
+    ctx.obj['image'] = fourier(image, img_mode, inverse, numpy)
 
     if inverse:
-        out_image = np.empty_like(image, dtype='uint8')
-        out_image[:,:,1] = np.real(image[:,:,1])
-        out_image[:,:,2] = np.real(image[:,:,2])
-
-        if numpy:
-            temp = np.fft.ifft2(image[:,:,0])
-        else:
-            temp = idft(image[:,:,0])
-
-        out_image[:,:,0] = np.real(temp)
-
-        ctx.obj['image'] = convert(out_image, 'YCbCr', 'RGB')
         ctx.obj['img_mode'] = 'RGB'
-
     else:
-        image = convert(image, img_mode, 'YCbCr')
-
-        out_image = np.empty_like(image, dtype='complex')
-        out_image[:,:,1] = image[:,:,1]
-        out_image[:,:,2] = image[:,:,2]
-
-        if numpy:
-            temp = np.fft.fft2(image[:,:,0])
-        else:
-            temp = dft(image[:,:,0])
-
-        out_image[:,:,0] = temp
-
-        ctx.obj['image'] = out_image
         ctx.obj['img_mode'] = 'spectrum'
 
 
@@ -266,7 +239,7 @@ def resize_cmd(ctx, scale, mode):
 @click.option('-a', '--par-a', 'par_a', default=0, type=click.FLOAT)
 @click.option('-b', '--par-b', 'par_b', default=0, type=click.FLOAT)
 @click.pass_context
-def misc(ctx, number, par_a, par_b):
+def misc_cmd(ctx, number, par_a, par_b):
     image = ctx.obj['image']
 
     if number == 0:
@@ -287,7 +260,7 @@ def misc(ctx, number, par_a, par_b):
 @click.option('-a', '--par-a', 'par_a', default=0, type=click.FLOAT)
 @click.option('-b', '--par-b', 'par_b', default=0, type=click.FLOAT)
 @click.pass_context
-def misc(ctx, number, dimension_x, dimension_y, par_a, par_b):
+def create_cmd(ctx, number, dimension_x, dimension_y, par_a, par_b):
     image = np.zeros((dimension_x, dimension_y, 3), 'uint8')
     mode = 'RGB'
 
@@ -309,6 +282,27 @@ def misc(ctx, number, dimension_x, dimension_y, par_a, par_b):
 
     ctx.obj['image'] = image
     ctx.obj['img_mode'] = mode
+
+
+@cli.command('compress')
+@click.option('-o', '--output', 'output', default='output/temp.huf', type=click.Path())
+@click.pass_context
+def compress_cmd(ctx, output):
+    image = ctx.obj['image']
+    img_mode = ctx.obj['img_mode']
+
+    compress(image, img_mode, output)
+
+@cli.command('decompress')
+@click.option('-i', '--input', 'input', default='output/temp.huf', type=click.Path())
+@click.pass_context
+def decompress_cmd(ctx, input):
+    image = decompress(input)
+
+    click.echo(image)
+
+    ctx.obj['image'] = image;
+    ctx.obj['img_mode'] = 'RGB';
 
 
 if __name__ == "__main__":

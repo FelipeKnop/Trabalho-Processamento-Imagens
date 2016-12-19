@@ -1,4 +1,5 @@
 import math
+import struct
 
 import click
 import PIL.Image
@@ -7,9 +8,10 @@ import scipy.signal
 import numpy as np
 
 import utils
+import huffman
 
 
-def open(input):
+def open_image(input):
     click.echo('Abrindo "%s"' % input)
     pil_image = PIL.Image.open(input).convert('RGB')
     return np.array(pil_image)
@@ -339,6 +341,38 @@ def idft(image):
     return np.matmul(np.matmul(Wm, image), Wn)
 
 
+def fourier(image, img_mode, inverse, numpy):
+    if inverse:
+        out_image = np.empty_like(image, dtype='uint8')
+        out_image[:,:,1] = np.real(image[:,:,1])
+        out_image[:,:,2] = np.real(image[:,:,2])
+
+        if numpy:
+            temp = np.fft.ifft2(image[:,:,0])
+        else:
+            temp = idft(image[:,:,0])
+
+        out_image[:,:,0] = np.real(temp)
+
+        return convert(out_image, 'YCbCr', 'RGB')
+
+    else:
+        image = convert(image, img_mode, 'YCbCr')
+
+        out_image = np.empty_like(image, dtype='complex')
+        out_image[:,:,1] = image[:,:,1]
+        out_image[:,:,2] = image[:,:,2]
+
+        if numpy:
+            temp = np.fft.fft2(image[:,:,0])
+        else:
+            temp = dft(image[:,:,0])
+
+        out_image[:,:,0] = temp
+
+        return out_image
+
+
 def product(image, kernel, radius, size):
     M, N, _ = image.shape
     xx, yy = np.indices((M, N))
@@ -399,3 +433,73 @@ def resize(image, scale, mode):
     image = np.array(pil_image)
 
     return image
+
+
+def compress(image, img_mode, output):
+    # A = np.arange(15).reshape(3,5) + 5
+    #
+    # click.echo(A)
+    # click.echo(utils.matrix_to_spiral(A))
+    # click.echo(utils.matrix_from_spiral(utils.matrix_to_spiral(A), A.shape[0], A.shape[1]))
+
+    shape = image.shape
+
+    fourier_image = fourier(image, img_mode, False, False)
+
+    Yr = (fourier_image[:,:,0].real).astype('int')
+    Yi = (fourier_image[:,:,0].imag).astype('int')
+    Cb = fourier_image[:,:,1].real.astype('uint8')
+    Cr = fourier_image[:,:,2].real.astype('uint8')
+
+    byte_Yr = Yr.tobytes()
+    byte_Yi = Yi.tobytes()
+    byte_Cb = Cb.tobytes()
+    byte_Cr = Cr.tobytes()
+
+    encoded_Yr = huffman.encode(byte_Yr)
+    encoded_Yi = huffman.encode(byte_Yi)
+    encoded_Cb = huffman.encode(byte_Cb)
+    encoded_Cr = huffman.encode(byte_Cr)
+
+    length_Yr = len(encoded_Yr)
+    length_Yi = len(encoded_Yi)
+    length_Cb = len(encoded_Cb)
+    length_Cr = len(encoded_Cr)
+
+    # click.echo((length_Yr, length_Yi, length_Cb, length_Cr))
+
+    fmt = 'iiiiii%us%us%us%us' % (length_Yr, length_Yi, length_Cb, length_Cr)
+
+    with open(output, 'wb') as file:
+        file.write(struct.pack(fmt, shape[0], shape[1],
+                               length_Yr, length_Yi, length_Cb, length_Cr,
+                               encoded_Yr, encoded_Yi, encoded_Cb, encoded_Cr))
+
+
+def decompress(input):
+    with open(input, 'rb') as file:
+        data = file.read()
+
+    shape, data = struct.unpack('ii', data[:8]), data[8:]
+    (length_Yr, length_Yi, length_Cb, length_Cr), data = struct.unpack('iiii', data[:16]), data[16:]
+
+    fmt = '%us%us%us%us' % (length_Yr, length_Yi, length_Cb, length_Cr)
+    (encoded_Yr, encoded_Yi, encoded_Cb, encoded_Cr) = struct.unpack(fmt, data)
+
+    byte_Yr = huffman.decode(encoded_Yr)
+    byte_Yi = huffman.decode(encoded_Yi)
+    byte_Cb = huffman.decode(encoded_Cb)
+    byte_Cr = huffman.decode(encoded_Cr)
+
+    Y = (np.fromstring(byte_Yr, dtype='int') + np.fromstring(byte_Yi, dtype='int')*1j).reshape(shape)
+    Cb = np.fromstring(byte_Cb, dtype='uint8').reshape(shape)
+    Cr = np.fromstring(byte_Cr, dtype='uint8').reshape(shape)
+
+    decoded_image = np.empty((shape[0], shape[1], 3), dtype='complex')
+    decoded_image[:,:,0] = Y
+    decoded_image[:,:,1] = Cb
+    decoded_image[:,:,2] = Cr
+
+    # decoded_image = np.fromstring(byte_image, dtype='complex').reshape(shape)
+
+    return fourier(decoded_image, 'spectrum', True, False)
