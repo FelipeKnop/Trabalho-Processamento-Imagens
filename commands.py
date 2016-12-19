@@ -446,34 +446,59 @@ def compress(image, img_mode, output):
 
     fourier_image = fourier(image, img_mode, False, False)
 
-    Yr = (fourier_image[:,:,0].real).astype('int')
-    Yi = (fourier_image[:,:,0].imag).astype('int')
-    Cb = fourier_image[:,:,1].real.astype('uint8')
-    Cr = fourier_image[:,:,2].real.astype('uint8')
+    Y = fourier_image[:,:,0]
+    Ym = np.sqrt((Y.real)**2 + (Y.imag)**2) / 4000
+    Yp = (np.arctan2(Y.imag, Y.real) + math.pi) * 255 / (2 * math.pi) / 4
+    Cb = fourier_image[:,:,1] / 4
+    Cr = fourier_image[:,:,2] / 4
 
-    byte_Yr = Yr.tobytes()
-    byte_Yi = Yi.tobytes()
-    byte_Cb = Cb.tobytes()
-    byte_Cr = Cr.tobytes()
+    # if center:
+    #     show_image = np.roll(show_image, int(M/2), 0)
+    #     show_image = np.roll(show_image, int(N/2), 1)
 
-    encoded_Yr = huffman.encode(byte_Yr)
-    encoded_Yi = huffman.encode(byte_Yi)
-    encoded_Cb = huffman.encode(byte_Cb)
-    encoded_Cr = huffman.encode(byte_Cr)
+    Ym = Ym.astype('int')
+    Yp = Yp.astype('uint8')
+    Cb = Cb.real.astype('uint8')
+    Cr = Cr.real.astype('uint8')
 
-    length_Yr = len(encoded_Yr)
-    length_Yi = len(encoded_Yi)
-    length_Cb = len(encoded_Cb)
-    length_Cr = len(encoded_Cr)
+    Ym = utils.matrix_to_spiral(Ym)
+    Yp = utils.matrix_to_spiral(Yp)
+    Cb = utils.matrix_to_spiral(Cb)
+    Cr = utils.matrix_to_spiral(Cr)
 
-    # click.echo((length_Yr, length_Yi, length_Cb, length_Cr))
+    # click.echo(Ym)
+    # click.echo(utils.rl_decode(utils.rl_encode(Ym)))
+    # if Ym == utils.rl_decode(utils.rl_encode(Ym)):
+    #     click.echo('a')
 
-    fmt = 'iiiiii%us%us%us%us' % (length_Yr, length_Yi, length_Cb, length_Cr)
+    Ym = utils.rl_encode(Ym)
+    # Yp = utils.rl_encode(Yp)
+    Cb = utils.rl_encode(Cb)
+    Cr = utils.rl_encode(Cr)
+
+    Ym = Ym.tobytes()
+    Yp = Yp.tobytes()
+    Cb = Cb.tobytes()
+    Cr = Cr.tobytes()
+
+    Ym = huffman.encode(Ym)
+    Yp = huffman.encode(Yp)
+    Cb = huffman.encode(Cb)
+    Cr = huffman.encode(Cr)
+
+    length_Ym = len(Ym)
+    length_Yp = len(Yp)
+    length_Cb = len(Cb)
+    length_Cr = len(Cr)
+
+    # click.echo((length_Ym, length_Yp, length_Cb, length_Cr))
+
+    fmt = 'iiiiii%us%us%us%us' % (length_Ym, length_Yp, length_Cb, length_Cr)
 
     with open(output, 'wb') as file:
         file.write(struct.pack(fmt, shape[0], shape[1],
-                               length_Yr, length_Yi, length_Cb, length_Cr,
-                               encoded_Yr, encoded_Yi, encoded_Cb, encoded_Cr))
+                               length_Ym, length_Yp, length_Cb, length_Cr,
+                               Ym, Yp, Cb, Cr))
 
 
 def decompress(input):
@@ -481,25 +506,40 @@ def decompress(input):
         data = file.read()
 
     shape, data = struct.unpack('ii', data[:8]), data[8:]
-    (length_Yr, length_Yi, length_Cb, length_Cr), data = struct.unpack('iiii', data[:16]), data[16:]
+    (length_Ym, length_Yp, length_Cb, length_Cr), data = struct.unpack('iiii', data[:16]), data[16:]
 
-    fmt = '%us%us%us%us' % (length_Yr, length_Yi, length_Cb, length_Cr)
-    (encoded_Yr, encoded_Yi, encoded_Cb, encoded_Cr) = struct.unpack(fmt, data)
+    fmt = '%us%us%us%us' % (length_Ym, length_Yp, length_Cb, length_Cr)
+    (Ym, Yp, Cb, Cr) = struct.unpack(fmt, data)
 
-    byte_Yr = huffman.decode(encoded_Yr)
-    byte_Yi = huffman.decode(encoded_Yi)
-    byte_Cb = huffman.decode(encoded_Cb)
-    byte_Cr = huffman.decode(encoded_Cr)
+    Ym = huffman.decode(Ym)
+    Yp = huffman.decode(Yp)
+    Cb = huffman.decode(Cb)
+    Cr = huffman.decode(Cr)
 
-    Y = (np.fromstring(byte_Yr, dtype='int') + np.fromstring(byte_Yi, dtype='int')*1j).reshape(shape)
-    Cb = np.fromstring(byte_Cb, dtype='uint8').reshape(shape)
-    Cr = np.fromstring(byte_Cr, dtype='uint8').reshape(shape)
+    Ym = np.frombuffer(Ym, dtype='int')
+    Yp = np.frombuffer(Yp, dtype='uint8')
+    Cb = np.frombuffer(Cb, dtype='uint8')
+    Cr = np.frombuffer(Cr, dtype='uint8')
+
+    Ym = utils.rl_decode(Ym)
+    # Yp = utils.rl_decode(Yp)
+    Cb = utils.rl_decode(Cb)
+    Cr = utils.rl_decode(Cr)
+
+    Ym = utils.matrix_from_spiral(Ym, shape[0], shape[1])
+    Yp = utils.matrix_from_spiral(Yp, shape[0], shape[1])
+    Cb = utils.matrix_from_spiral(Cb, shape[0], shape[1])
+    Cr = utils.matrix_from_spiral(Cr, shape[0], shape[1])
+
+    Ym = Ym * 4000
+    Yp = (Yp * ((2 * math.pi) / 255) * 4) - math.pi
+    Y = ((Ym * np.cos(Yp)) + (Ym * np.sin(Yp)) * 1j).reshape(shape)
+    Cb = Cb * 4
+    Cr = Cr * 4
 
     decoded_image = np.empty((shape[0], shape[1], 3), dtype='complex')
     decoded_image[:,:,0] = Y
     decoded_image[:,:,1] = Cb
     decoded_image[:,:,2] = Cr
-
-    # decoded_image = np.fromstring(byte_image, dtype='complex').reshape(shape)
 
     return fourier(decoded_image, 'spectrum', True, False)

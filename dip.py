@@ -299,8 +299,6 @@ def compress_cmd(ctx, output):
 def decompress_cmd(ctx, input):
     image = decompress(input)
 
-    click.echo(image)
-
     ctx.obj['image'] = image;
     ctx.obj['img_mode'] = 'RGB';
 
