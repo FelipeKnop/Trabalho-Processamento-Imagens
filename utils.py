@@ -21,6 +21,20 @@ def normalize(array, new_min, new_max, ignore_first_max = False):
     return (array - min) * ((new_max - new_min) / (max - min)) + new_min
 
 
+# Reference: http://stackoverflow.com/a/29216609
+def quantization_matrix(A, Q=50):
+    base_matrix = np.linspace(0.7, 0.1, A.shape[0]) * (np.abs(A).max() / 255)
+
+    if Q < 50:
+        S = 5000/(Q+1)
+    else:
+        S = 200 - 2*Q
+
+    q_matrix = np.floor((S * base_matrix + 50) / 100).astype('int')
+
+    return q_matrix
+
+
 # Reference: http://stackoverflow.com/a/16715845
 def submatrices(A, nrow, ncol, padding=True):
     if padding:
