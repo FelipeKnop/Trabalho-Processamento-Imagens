@@ -20,32 +20,50 @@ def normalize(array, new_min, new_max, ignore_first_max = False):
 
     return (array - min) * ((new_max - new_min) / (max - min)) + new_min
 
+
+# Reference: http://stackoverflow.com/a/16715845
+def submatrices(A, nrow, ncol, padding=True):
+    if padding:
+        padr = A.shape[0] % nrow
+        padc = A.shape[1] % ncol
+        A = np.pad(A, ((0, nrow - padr), (0, ncol - padc)), 'edge')
+
+    lenr = int(A.shape[0] / nrow)
+    lenc = int(A.shape[1] / ncol)
+
+    return np.array([A[i*nrow:(i + 1)*nrow, j*ncol:(j + 1)*ncol] for (i, j) in np.ndindex(lenr, lenc)]).reshape(lenr, lenc, nrow, ncol)
+
+
+def delta_encode(A):
+    return A - np.concatenate(([0], A[:-1]))
+
+
+def delta_decode(A):
+    return np.cumsum(A)
+
+
 # Reference: http://stackoverflow.com/a/24892274
-def rl_encode(A):
-    # A = np.array([1,1,1,1,0,8,1,1,1,1,1,0,2,2,2,9,9,9,9,9,9,0,1,9,9,0,9])
-    iszero = np.concatenate(([0], np.equal(A, 0), [0]))
-    absdiff = np.abs(np.diff(iszero))
+def rl_encode(A, value=0):
+    isvalue = np.concatenate(([0], np.equal(A, value), [0]))
+    absdiff = np.abs(np.diff(isvalue))
 
     ranges = np.where(absdiff == 1)[0].reshape(-1, 2)[::-1]
 
     for (begin, end) in ranges:
         while(end - begin > 255):
-            A = np.concatenate((A[:(end - 255)], [0, 255], A[end:]))
+            A = np.concatenate((A[:(end - 255)], np.array([0, 255], dtype=A.dtype), A[end:]))
             end -= 255
 
-        A = np.concatenate((A[:begin], [0, end - begin], A[end:]))
+        A = np.concatenate((A[:begin], np.array([0, end - begin], dtype=A.dtype), A[end:]))
 
-
-    click.echo(A)
     return A
 
-def rl_decode(A):
-    iszero = np.where(A[:-1] == 0)[0][::-1]
-    click.echo(A)
 
-    for begin in iszero:
-        # click.echo(A)
-        A = np.concatenate((A[:begin], np.full(A[begin + 1], A[begin], dtype=A.dtype), A[begin + 2:]))
+def rl_decode(A, value=0):
+    isvalue = np.where(A[:-1] == 0)[0][::-1]
+
+    for begin in isvalue:
+        A = np.concatenate((A[:begin], np.full(A[begin + 1], value, dtype=A.dtype), A[begin + 2:]))
 
     return A
 

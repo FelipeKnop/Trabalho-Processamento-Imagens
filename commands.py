@@ -435,80 +435,107 @@ def resize(image, scale, mode):
     return image
 
 
-def compress(image, img_mode, output):
-    # A = np.arange(15).reshape(3,5) + 5
-    #
-    # click.echo(A)
-    # click.echo(utils.matrix_to_spiral(A))
-    # click.echo(utils.matrix_from_spiral(utils.matrix_to_spiral(A), A.shape[0], A.shape[1]))
+GAMMA = 1.6
+GAMMA_R = 1.38
+GAMMA_I = 0.9
+CS = 6 # Chroma Subsampling
 
+def compress(image, img_mode, output):
     shape = image.shape
 
     fourier_image = fourier(image, img_mode, False, False)
 
     Y = fourier_image[:,:,0]
-    Ym = np.sqrt((Y.real)**2 + (Y.imag)**2) / 10000
-    Yp = (np.arctan2(Y.imag, Y.real) + math.pi) * 255 / (2 * math.pi) / 4
 
-    Cb00 = fourier_image[::2,::2,1] / 4
-    Cb01 = fourier_image[1::2,::2,1] / 4
-    Cb10 = fourier_image[::2,1::2,1] / 4
-    Cb11 = fourier_image[1::2,1::2,1] / 4
-    Cb = (Cb00 + Cb01 + Cb10 + Cb11) / 4
+    # test = np.empty((shape[0], shape[1], 3), dtype='complex')
+    # test[:,:,0] = Y
+    # test[:,:,1] = 128
+    # test[:,:,2] = 128
+    # display(test, 'spectrum', phase=False, logarithm=True, center=True)
 
-    Cr00 = fourier_image[::2,::2,2] / 4
-    Cr01 = fourier_image[1::2,::2,2] / 4
-    Cr10 = fourier_image[::2,1::2,2] / 4
-    Cr11 = fourier_image[1::2,1::2,2] / 4
-    Cr = (Cr00 + Cr01 + Cr10 + Cr11) / 4
+    # Ym = np.sqrt((Y.real)**2 + (Y.imag)**2)
+    # Yp = (np.arctan2(Y.imag, Y.real) + math.pi) * 255 / (2 * math.pi) / 1
 
-    # if center:
-    #     show_image = np.roll(show_image, int(M/2), 0)
-    #     show_image = np.roll(show_image, int(N/2), 1)
+    # Yf =  Ym.max()
+    # Ym = ((Ym / Yf) ** (1 / GAMMA)) * 255
 
-    Ym = Ym.astype('int')
-    Yp = Yp.astype('uint8')
+    Yr = Y.real
+    Yi = Y.imag
+
+    Yrf =  np.abs(Yr).max()
+    Yif =  np.abs(Yi).max()
+
+    neg_mask = Yr < 0
+    Yr = np.abs(Yr / Yrf) ** (1 / GAMMA_R)
+    Yr[neg_mask] *= -1
+    Yr = ((Yr / 2) + 0.5) * 255
+
+    neg_mask = Yi < 0
+    Yi = np.abs(Yi / Yif) ** (1 / GAMMA_I)
+    Yi[neg_mask] *= -1
+    Yi = ((Yi / 2) + 0.5) * 255
+
+
+    Cb = fourier_image[:,:,1]
+    Cb = utils.submatrices(Cb, CS, CS).mean((2, 3))
+    Cr = fourier_image[:,:,2]
+    Cr = utils.submatrices(Cr, CS, CS).mean((2, 3))
+
+    # Ym = Ym.astype('uint8')
+    # Yp = Yp.astype('uint8')
+    Yr = Yr.astype('uint8')
+    Yi = Yi.astype('uint8')
     Cb = Cb.real.astype('uint8')
     Cr = Cr.real.astype('uint8')
 
-    Ym = utils.matrix_to_spiral(Ym)
-    Yp = utils.matrix_to_spiral(Yp)
+    # Ym = utils.matrix_to_spiral(Ym)
+    # Yp = utils.matrix_to_spiral(Yp)
+    Yr = utils.matrix_to_spiral(Yr)
+    Yi = utils.matrix_to_spiral(Yi)
     Cb = utils.matrix_to_spiral(Cb)
     Cr = utils.matrix_to_spiral(Cr)
 
-    # click.echo(Ym)
-    # click.echo(utils.rl_decode(utils.rl_encode(Ym)))
-    # if Ym == utils.rl_decode(utils.rl_encode(Ym)):
-    #     click.echo('a')
-
-    Ym = utils.rl_encode(Ym)
+    # Ym = utils.rl_encode(Ym)
     # Yp = utils.rl_encode(Yp)
-    Cb = utils.rl_encode(Cb)
-    Cr = utils.rl_encode(Cr)
+    Yr = utils.rl_encode(Yr, 127)
+    Yi = utils.rl_encode(Yi, 127)
+    # Cb = utils.rl_encode(Cb)
+    # Cr = utils.rl_encode(Cr)
 
-    Ym = Ym.tobytes()
-    Yp = Yp.tobytes()
+    # Ym = Ym.tobytes()
+    # Yp = Yp.tobytes()
+    Yr = Yr.tobytes()
+    Yi = Yi.tobytes()
     Cb = Cb.tobytes()
     Cr = Cr.tobytes()
 
-    Ym = huffman.encode(Ym)
-    Yp = huffman.encode(Yp)
+    # Ym = huffman.encode(Ym)
+    # Yp = huffman.encode(Yp)
+    Yr = huffman.encode(Yr)
+    Yi = huffman.encode(Yi)
     Cb = huffman.encode(Cb)
     Cr = huffman.encode(Cr)
 
-    length_Ym = len(Ym)
-    length_Yp = len(Yp)
+    # length_Ym = len(Ym)
+    # length_Yp = len(Yp)
+    length_Yr = len(Yr)
+    length_Yi = len(Yi)
     length_Cb = len(Cb)
     length_Cr = len(Cr)
 
     # click.echo((length_Ym, length_Yp, length_Cb, length_Cr))
+    click.echo((length_Yr, length_Yi, length_Cb, length_Cr))
 
-    fmt = 'iiiiii%us%us%us%us' % (length_Ym, length_Yp, length_Cb, length_Cr)
+    # fmt = 'iifiiii%us%us%us%us' % (length_Ym, length_Yp, length_Cb, length_Cr)
+    fmt = 'iiffiiii%us%us%us%us' % (length_Yr, length_Yi, length_Cb, length_Cr)
 
     with open(output, 'wb') as file:
-        file.write(struct.pack(fmt, shape[0], shape[1],
-                               length_Ym, length_Yp, length_Cb, length_Cr,
-                               Ym, Yp, Cb, Cr))
+        # file.write(struct.pack(fmt, shape[0], shape[1], Yf,
+        #                        length_Ym, length_Yp, length_Cb, length_Cr,
+        #                        Ym, Yp, Cb, Cr))
+        file.write(struct.pack(fmt, shape[0], shape[1], Yrf, Yif,
+                               length_Yr, length_Yi, length_Cb, length_Cr,
+                               Yr, Yi, Cb, Cr))
 
 
 def decompress(input):
@@ -516,48 +543,76 @@ def decompress(input):
         data = file.read()
 
     shape, data = struct.unpack('ii', data[:8]), data[8:]
-    (length_Ym, length_Yp, length_Cb, length_Cr), data = struct.unpack('iiii', data[:16]), data[16:]
+    # (Yf, length_Ym, length_Yp, length_Cb, length_Cr), data = struct.unpack('fiiii', data[:20]), data[20:]
+    (Yrf, Yif, length_Yr, length_Yi, length_Cb, length_Cr), data = struct.unpack('ffiiii', data[:24]), data[24:]
 
-    fmt = '%us%us%us%us' % (length_Ym, length_Yp, length_Cb, length_Cr)
-    (Ym, Yp, Cb, Cr) = struct.unpack(fmt, data)
+    # fmt = '%us%us%us%us' % (length_Ym, length_Yp, length_Cb, length_Cr)
+    fmt = '%us%us%us%us' % (length_Yr, length_Yi, length_Cb, length_Cr)
+    # (Ym, Yp, Cb, Cr) = struct.unpack(fmt, data)
+    (Yr, Yi, Cb, Cr) = struct.unpack(fmt, data)
 
-    Ym = huffman.decode(Ym)
-    Yp = huffman.decode(Yp)
+    # Ym = huffman.decode(Ym)
+    # Yp = huffman.decode(Yp)
+    Yr = huffman.decode(Yr)
+    Yi = huffman.decode(Yi)
     Cb = huffman.decode(Cb)
     Cr = huffman.decode(Cr)
 
-    Ym = np.frombuffer(Ym, dtype='int')
-    Yp = np.frombuffer(Yp, dtype='uint8')
+    # Ym = np.frombuffer(Ym, dtype='uint8')
+    # Yp = np.frombuffer(Yp, dtype='uint8')
+    Yr = np.frombuffer(Yr, dtype='uint8')
+    Yi = np.frombuffer(Yi, dtype='uint8')
     Cb = np.frombuffer(Cb, dtype='uint8')
     Cr = np.frombuffer(Cr, dtype='uint8')
 
-    Ym = utils.rl_decode(Ym)
+    # Ym = utils.rl_decode(Ym)
     # Yp = utils.rl_decode(Yp)
-    Cb = utils.rl_decode(Cb)
-    Cr = utils.rl_decode(Cr)
+    Yr = utils.rl_decode(Yr, 127)
+    Yi = utils.rl_decode(Yi, 127)
+    # Cb = utils.rl_decode(Cb)
+    # Cr = utils.rl_decode(Cr)
 
-    Ym = utils.matrix_from_spiral(Ym, shape[0], shape[1])
-    Yp = utils.matrix_from_spiral(Yp, shape[0], shape[1])
-    Cb = utils.matrix_from_spiral(Cb, int(shape[0]/2), int(shape[1]/2))
-    Cr = utils.matrix_from_spiral(Cr, int(shape[0]/2), int(shape[1]/2))
+    # Ym = utils.matrix_from_spiral(Ym, shape[0], shape[1])
+    # Yp = utils.matrix_from_spiral(Yp, shape[0], shape[1])
+    Yr = utils.matrix_from_spiral(Yr, shape[0], shape[1])
+    Yi = utils.matrix_from_spiral(Yi, shape[0], shape[1])
+    Cb = utils.matrix_from_spiral(Cb, math.ceil(shape[0] / CS), math.ceil(shape[1] / CS))
+    Cr = utils.matrix_from_spiral(Cr, math.ceil(shape[0] / CS), math.ceil(shape[1] / CS))
 
-    Ym = Ym * 10000
-    Yp = (Yp * ((2 * math.pi) / 255) * 4) - math.pi
-    Y = ((Ym * np.cos(Yp)) + (Ym * np.sin(Yp)) * 1j).reshape(shape)
-    Cb = Cb * 4
-    Cr = Cr * 4
+    # Ym = ((Ym / 255) ** GAMMA) * Yf
+    # Yp = (Yp * ((2 * math.pi) / 255) * 1) - math.pi
+    # Y = ((Ym * np.cos(Yp)) + (Ym * np.sin(Yp)) * 1j).reshape(shape)
+
+    Yr = ((Yr / 255) - 0.5) * 2
+    neg_mask = Yr < 0
+    Yr = np.abs(Yr) ** (GAMMA_R)
+    Yr[neg_mask] *= -1
+    Yr = Yr * Yrf
+
+    Yi = ((Yi / 255) - 0.5) * 2
+    neg_mask = Yi < 0
+    Yi = np.abs(Yi) ** (GAMMA_I)
+    Yi[neg_mask] *= -1
+    Yi = Yi * Yif
+
+    Y = (Yr + Yi * 1j)
+
+    # test = np.empty((shape[0], shape[1], 3), dtype='complex')
+    # test[:,:,0] = Y
+    # test[:,:,1] = 128
+    # test[:,:,2] = 128
+    # display(test, 'spectrum', phase=False, logarithm=True, center=True)
+
+    # Cb = Cb * 4
+    Cb = np.repeat(Cb, CS, 0)
+    Cb = np.repeat(Cb, CS, 1)
+    # Cr = Cr * 4
+    Cr = np.repeat(Cr, CS, 0)
+    Cr = np.repeat(Cr, CS, 1)
 
     decoded_image = np.empty((shape[0], shape[1], 3), dtype='complex')
     decoded_image[:,:,0] = Y
-
-    decoded_image[::2,::2,1] = Cb
-    decoded_image[1::2,::2,1] = Cb
-    decoded_image[::2,1::2,1] = Cb
-    decoded_image[1::2,1::2,1] = Cb
-
-    decoded_image[::2,::2,2] = Cr
-    decoded_image[1::2,::2,2] = Cr
-    decoded_image[::2,1::2,2] = Cr
-    decoded_image[1::2,1::2,2] = Cr
+    decoded_image[:,:,1] = Cb[:shape[0],:shape[1]]
+    decoded_image[:,:,2] = Cr[:shape[0],:shape[1]]
 
     return fourier(decoded_image, 'spectrum', True, False)
