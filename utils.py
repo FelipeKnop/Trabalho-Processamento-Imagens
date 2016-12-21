@@ -23,9 +23,29 @@ def normalize(array, new_min, new_max, ignore_first_max = False):
 
 
 # Reference: http://stackoverflow.com/a/29216609
-def quantization_matrix(A, Q=50):
-    base_matrix = np.linspace(0.7, 0.1, A.shape[0]) * (np.abs(A).max() / 255)
-    plt.plot(base_matrix)
+def quantization_matrix(shape, Q=50):
+    temp_m = np.arange(0, shape[0]) - int(shape[0] / 2)
+    temp_n = np.arange(0, shape[1]) - int(shape[1] / 2)
+    xx, yy = np.meshgrid(temp_m, temp_n)
+    base_matrix = ((xx**2 + yy*2) * 8 + 128).astype('int')
+
+    # base_matrix = np.array([[82,  82,  82,  82,  82,  82,  82,  82],
+    #                         [82,  53,  53,  53,  53,  53,  53,  82],
+    #                         [82,  53,  22,  22,  22,  22,  53,  82],
+    #                         [82,  53,  22,  10,  10,  22,  53,  82],
+    #                         [82,  53,  22,  10,  10,  22,  53,  82],
+    #                         [82,  53,  22,  22,  22,  22,  53,  82],
+    #                         [82,  53,  53,  53,  53,  53,  53,  82],
+    #                         [82,  82,  82,  82,  82,  82,  82,  82]])
+    # base_matrix = np.array([ 16,  11,  12,  14,  12,  10,  16,  14,
+    #                          13,  14,  18,  17,  16,  19,  24,  40,
+    #                          26,  24,  22,  22,  24,  49,  35,  37,
+    #                          29,  40,  58,  51,  61,  60,  57,  51,
+    #                          56,  55,  64,  72,  92,  78,  64,  68,
+    #                          87,  69,  55,  56,  80, 109,  81,  87,
+    #                          95,  98, 103, 104, 103,  62,  77, 113,
+    #                         121, 112, 100, 120,  92, 101, 103,  99])
+    # base_matrix = np.linspace(0.7, 0.1, A.shape[0]) * (np.abs(A).max() / 255)
 
     if Q < 50:
         S = 5000/(Q+1)
@@ -33,9 +53,6 @@ def quantization_matrix(A, Q=50):
         S = 200 - 2*Q
 
     q_matrix = np.floor((S * base_matrix + 50) / 100).astype('int')
-
-    plt.plot(q_matrix)
-    plt.show()
 
     return q_matrix
 

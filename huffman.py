@@ -58,7 +58,11 @@ def _huffman_to_bytes(huffman):
 
 def huffman_from_bytes(bytes):
     huffman_array = pickle.loads(bytes)
-    return _huffman_from_bytes(huffman_array)
+
+    if isinstance(huffman_array, list):
+        return _huffman_from_bytes(huffman_array)
+    else:
+        return HuffmanNode(symbol=huffman_array)
 
 def _huffman_from_bytes(huffman_array):
     if isinstance(huffman_array[0], list):
@@ -281,9 +285,9 @@ def encode(data):
     length_tree = len(bytes_tree)
     length_data = len(encoded_data)
 
-    fmt = 'iii%us%us' % (length_tree, length_data)
+    # print('Huff: %d | Data: %d' % (length_tree, length_data))
 
-    print(length_tree, length_data)
+    fmt = 'iii%us%us' % (length_tree, length_data)
 
     return struct.pack(fmt, length_tree, length_data, code_length, bytes_tree, bytes(encoded_data))
 

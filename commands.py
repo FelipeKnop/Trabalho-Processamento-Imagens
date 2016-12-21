@@ -449,82 +449,79 @@ def resize(image, scale, mode):
     return image
 
 
-GAMMA = 1.6
-GAMMA_R = 1.38
-GAMMA_I = 0.9
-CS = 8 # Chroma subsampling
+GAMMA = 1
+CS = 2 # Chroma subsampling
+BLOCK_SIZE = 8
 
-def compress_channel(channel):
-    nrow, ncol = channel.shape
-
+def compress_block(block):
     # Center the channel
 
-    channel = np.roll(channel, int(nrow / 2), 0)
-    channel = np.roll(channel, int(ncol / 2), 1)
-
-    # Spiral ordering
-
-    channel = utils.matrix_to_spiral(channel)
+    block = np.roll(block, int(BLOCK_SIZE / 2), 0)
+    block = np.roll(block, int(BLOCK_SIZE / 2), 1)
 
     # Quantization
 
-    # channel = channel / utils.quantization_matrix(channel)
+    block = (block / utils.quantization_matrix(block.shape, 30)).astype('int')
+    # click.echo(block)
 
-    channel_min = channel.min()
-    channel_max = channel.max()
+    block_min = block.min()
+    block_max = block.max()
+    block_diff = block_max - block_min
 
-    # channel = ((channel - channel_min) * (2 / (channel_max - channel_min))) - 1
-    # neg_mask = channel < 0
-    # channel = np.abs(channel) ** (1 / GAMMA)
-    # channel[neg_mask] *= -1
-    # channel = (channel + 1) / 2
-    # channel = channel * 254 + 1
+    if block_diff == 0:
+        block_diff = 1
 
-    channel = (channel - channel_min) / (channel_max - channel_min)
-    channel = channel ** (1 / GAMMA)
-    channel = channel * 254 + 1
+    block = (block - block_min) / block_diff
+    block = block * 254 + 1
 
-    channel = channel.astype('int')
+    block = block.astype('uint8')
+
+    # Spiral ordering
+
+    block = utils.matrix_to_spiral(block)
 
     # Run-length encode
 
-    channel_zero = int(round((-channel_min / (channel_max - channel_min)) * 254.0, 10) + 1)
-    channel = utils.rl_encode(channel, channel_zero)
+    block_zero = int((-block_min / block_diff) * 254.0 + 1)
+    block = utils.rl_encode(block, block_zero)
 
     # Huffman encode
 
-    channel = channel.tobytes()
-    channel = huffman.encode(channel)
+    block = block.tobytes()
+    # block = huffman.encode(block)
 
-    return channel, channel_min, channel_max, len(channel)
+    return block, block_min, block_max, len(block)
+
+
+def compress_channel(channel):
+    # Block splitting
+
+    channel_split = utils.submatrices(channel, BLOCK_SIZE, BLOCK_SIZE)
+    channel_real = np.empty_like(channel_split)
+    channel_imag = np.empty_like(channel_split)
+
+    channel_data = bytearray()
+    channel_data.extend(struct.pack('ii', channel_split.shape[0], channel_split.shape[1]))
+    for x, y in np.ndindex(channel_split.shape[:2]):
+        # Fourier transform
+
+        temp = dft(channel_split[x,y])
+        Br = temp.real
+        Bi = temp.imag
+
+        # Block compression
+
+        Br_data, Br_min, Br_max, Br_length = compress_block(Br)
+        Bi_data, Bi_min, Bi_max, Bi_length = compress_block(Bi)
+
+        fmt = 'ffffii%us%us' % (Br_length, Bi_length)
+        channel_data.extend(struct.pack(fmt, Br_min, Br_max, Bi_min, Bi_max,
+                                        Br_length, Bi_length, Br_data, Bi_data))
+
+    return channel_data, len(channel_data)
 
 
 def compress(image, img_mode, output):
-    # a = base = np.arange(-512, 512)
-    #
-    # a_min = a.min()
-    # a_max = a.max()
-    #
-    # a = ((a - a_min) * (2 / (a_max - a_min))) - 1
-    # neg_mask = a < 0
-    # a = np.abs(a) ** (1 / GAMMA)
-    # a[neg_mask] *= -1
-    # a = (a + 1) / 2
-    # a = a * 254 + 1
-    #
-    # plt.plot(base, a)
-    # plt.show()
-    #
-    # a = (a - 1) / 254
-    # a = (a * 2) - 1
-    # neg_mask = a < 0
-    # a = np.abs(a) ** GAMMA
-    # a[neg_mask] *= -1
-    # a = ((a + 1) * ((a_max - a_min) / 2)) + a_min
-    #
-    # plt.plot(base, a)
-    # plt.show()
-
     shape = image.shape
 
     image = convert(image, img_mode, 'YCbCr')
@@ -535,123 +532,114 @@ def compress(image, img_mode, output):
     Cb = utils.submatrices(image[:,:,1], CS, CS).mean((2, 3))
     Cr = utils.submatrices(image[:,:,2], CS, CS).mean((2, 3))
 
-    # Fourier transform
-
-    Y = dft(Y)
-    Cb = dft(Cb)
-    Cr = dft(Cr)
-
     # Channel compression
 
-    Yr, Yr_min, Yr_max, Yr_length = compress_channel(Y.real)
-    Yi, Yi_min, Yi_max, Yi_length = compress_channel(Y.imag)
-    Cbr, Cbr_min, Cbr_max, Cbr_length = compress_channel(Cb.real)
-    Cbi, Cbi_min, Cbi_max, Cbi_length = compress_channel(Cb.imag)
-    Crr, Crr_min, Crr_max, Crr_length = compress_channel(Cr.real)
-    Cri, Cri_min, Cri_max, Cri_length = compress_channel(Cr.imag)
+    Y_data, Y_length = compress_channel(Y)
+    Cb_data, Cb_length = compress_channel(Cb)
+    Cr_data, Cr_length = compress_channel(Cr)
+    click.echo(Y_length)
+    click.echo(Cb_length)
+    click.echo(Cr_length)
 
-    test = np.empty((shape[0], shape[1], 3), dtype='complex')
-    test[:,:,0] = (Y.real + Y.imag * 1j)
-    test[:,:,1] = 128
-    test[:,:,2] = 128
-    display(test, 'spectrum', phase=False, logarithm=True, center=True)
+    # click.echo((Yr_length, Yi_length, Cbr_length, Cbi_length, Crr_length, Cri_length))
 
-    click.echo((Yr_length, Yi_length, Cbr_length, Cbi_length, Crr_length, Cri_length))
+    file_data = bytearray()
+    file_data.extend(struct.pack('iii', shape[0], shape[1], 3))
 
-    fmt = 'iiffffffffffffiiiiii%us%us%us%us%us%us' % (Yr_length, Yi_length,
-                                                      Cbr_length, Cbi_length,
-                                                      Crr_length, Cri_length)
+
+    fmt = 'iii%us%us%us' % (Y_length, Cb_length, Cr_length)
+    file_data.extend(struct.pack(fmt, Y_length, Cb_length, Cr_length, Y_data, Cb_data, Cr_data))
+
+    click.echo(len(file_data))
+    file_data = huffman.encode(file_data)
+    click.echo(len(file_data))
 
     with open(output, 'wb') as file:
-        file.write(struct.pack(fmt,
-                               shape[0], shape[1],
-                               Yr_min, Yr_max, Yi_min, Yi_max,
-                               Cbr_min, Cbr_max, Cbi_min, Cbi_max,
-                               Crr_min, Crr_max, Cri_min, Cri_max,
-                               Yr_length, Yi_length,
-                               Cbr_length, Cbi_length,
-                               Crr_length, Cri_length,
-                               Yr, Yi, Cbr, Cbi, Crr, Cri))
+        file.write(file_data)
 
 
-def decompress_channel(channel, nrow, ncol, channel_min, channel_max):
+def decompress_block(block, block_min, block_max):
     # Huffman decode
 
-    channel = huffman.decode(channel)
-    channel = np.frombuffer(channel, dtype='int')
+    # block = huffman.decode(block)
+    block = np.frombuffer(block, dtype='uint8')
 
     # Run-length decode
 
-    channel_zero = int(round((-channel_min / (channel_max - channel_min)) * 254.0, 10) + 1)
-    channel = utils.rl_decode(channel, channel_zero)
+    block_diff = block_max - block_min
+    if block_diff == 0:
+        block_diff = 1
 
-    # Reconstruction
-
-    # channel = channel * utils.quantization_matrix(channel)
-
-    # channel = (channel - 1) / 254
-    # channel = (channel * 2) - 1
-    # neg_mask = channel < 0
-    # channel = np.abs(channel) ** GAMMA
-    # channel[neg_mask] *= -1
-    # channel = ((channel + 1) * ((channel_max - channel_min) / 2)) + channel_min
-
-    channel = (channel - 1) / 254
-    channel = channel ** GAMMA
-    channel = (channel * (channel_max - channel_min)) + channel_min
+    block_zero = int((-block_min / block_diff) * 254.0 + 1)
+    block = utils.rl_decode(block, block_zero)
 
     # Matrix ordering
 
-    channel = utils.matrix_from_spiral(channel, nrow, ncol)
+    block = utils.matrix_from_spiral(block, BLOCK_SIZE, BLOCK_SIZE)
+
+    # Reconstruction
+
+    block = block * utils.quantization_matrix(block.shape, 30)
+
+    block = (block - 1) / 254
+    block = block ** GAMMA
+    block = (block * block_diff) + block_min
 
     # Decenter the channel
 
-    channel = np.roll(channel, int(nrow / 2), 0)
-    channel = np.roll(channel, int(ncol / 2), 1)
+    block = np.roll(block, -int(BLOCK_SIZE / 2), 0)
+    block = np.roll(block, -int(BLOCK_SIZE / 2), 1)
 
-    return channel
+    return block
+
+
+def decompress_channel(channel_data):
+    shape, channel_data = struct.unpack('ii', channel_data[:8]), channel_data[8:]
+
+    channel_split = np.empty((shape[0], shape[1], BLOCK_SIZE, BLOCK_SIZE))
+    for x, y in np.ndindex(shape):
+        (Br_min, Br_max, Bi_min, Bi_max), channel_data = struct.unpack('ffff', channel_data[:16]), channel_data[16:]
+        (Br_length, Bi_length), channel_data = struct.unpack('ii', channel_data[:8]), channel_data[8:]
+
+        fmt = '%us%us' % (Br_length, Bi_length)
+        fmt_size = struct.calcsize(fmt)
+        (Br_data, Bi_data), channel_data = struct.unpack(fmt, channel_data[:fmt_size]), channel_data[fmt_size:]
+
+        # Block compression
+
+        Br = decompress_block(Br_data, Br_min, Br_max)
+        Bi = decompress_block(Bi_data, Bi_min, Bi_max)
+
+        # Fourier transform
+
+        temp = (Br + Bi * 1j)
+        channel_split[x, y] = idft(temp).real.astype('uint8')
+
+    # click.echo(channel_split.reshape(shape[0]*BLOCK_SIZE, shape[1]*BLOCK_SIZE))
+    channel_split = channel_split.transpose(0, 2, 1, 3).reshape(shape[0], BLOCK_SIZE, shape[1] * BLOCK_SIZE)
+    channel_split = channel_split.transpose(2, 0, 1).reshape(shape[1] * BLOCK_SIZE, shape[0] * BLOCK_SIZE)
+    channel_split = channel_split.transpose(1, 0).reshape(shape[0] * BLOCK_SIZE, shape[1] * BLOCK_SIZE)
+
+    return channel_split
 
 
 def decompress(input):
     with open(input, 'rb') as file:
         data = file.read()
 
-    shape, data = struct.unpack('ii', data[:8]), data[8:]
-    (Yr_min, Yr_max, Yi_min, Yi_max), data = struct.unpack('ffff', data[:16]), data[16:]
-    (Cbr_min, Cbr_max, Cbi_min, Cbi_max), data = struct.unpack('ffff', data[:16]), data[16:]
-    (Crr_min, Crr_max, Cri_min, Cri_max), data = struct.unpack('ffff', data[:16]), data[16:]
+    data = huffman.decode(data)
 
-    (Yr_length, Yi_length), data = struct.unpack('ii', data[:8]), data[8:]
-    (Cbr_length, Cbi_length), data = struct.unpack('ii', data[:8]), data[8:]
-    (Crr_length, Cri_length), data = struct.unpack('ii', data[:8]), data[8:]
+    shape, data = struct.unpack('iii', data[:12]), data[12:]
+    (Y_length, Cb_length, Cr_length), data = struct.unpack('iii', data[:12]), data[12:]
 
-    fmt = '%us%us%us%us%us%us' % (Yr_length, Yi_length,
-                                  Cbr_length, Cbi_length,
-                                  Crr_length, Cri_length)
-    (Yr, Yi, Cbr, Cbi, Crr, Cri) = struct.unpack(fmt, data)
+    fmt = '%us%us%us' % (Y_length, Cb_length, Cr_length)
+    (Y_data, Cb_data, Cr_data) = struct.unpack(fmt, data)
 
-    Yr = decompress_channel(Yr, shape[0], shape[1], Yr_min, Yr_max)
-    Yi = decompress_channel(Yi, shape[0], shape[1], Yi_min, Yi_max)
-    Cbr = decompress_channel(Cbr, int(shape[0] / CS), int(shape[1] / CS), Cbr_min, Cbr_max)
-    Cbi = decompress_channel(Cbi, int(shape[0] / CS), int(shape[1] / CS), Cbi_min, Cbi_max)
-    Crr = decompress_channel(Crr, int(shape[0] / CS), int(shape[1] / CS), Crr_min, Crr_max)
-    Cri = decompress_channel(Cri, int(shape[0] / CS), int(shape[1] / CS), Cri_min, Cri_max)
+    # Channel decompression
 
-    test = np.empty((shape[0], shape[1], 3), dtype='complex')
-    test[:,:,0] = (Yr + Yi * 1j)
-    test[:,:,1] = 128
-    test[:,:,2] = 128
-    display(test, 'spectrum', phase=False, logarithm=True, center=True)
-
-    Y = (Yr + Yi * 1j)
-    Cb = (Cbr + Cbi * 1j)
-    Cr = (Crr + Cri * 1j)
-
-    # Fourier transform
-
-    Y = idft(Y).real.astype('uint8')
-    Cb = idft(Cb).real.astype('uint8')
-    Cr = idft(Cr).real.astype('uint8')
+    Y = decompress_channel(Y_data)
+    Cb = decompress_channel(Cb_data)
+    Cr = decompress_channel(Cr_data)
 
     # Chroma resampling
 
@@ -661,25 +649,10 @@ def decompress(input):
     Cr = np.repeat(Cr, CS, 1)
 
     decoded_image = np.empty((shape[0], shape[1], 3), dtype='uint8')
-    decoded_image[:,:,0] = Y
+    decoded_image[:,:,0] = Y[:shape[0],:shape[1]]
     decoded_image[:,:,1] = Cb[:shape[0],:shape[1]]
     decoded_image[:,:,2] = Cr[:shape[0],:shape[1]]
 
     decoded_image = convert(decoded_image, 'YCbCr', 'RGB')
 
     return decoded_image
-
-
-# a = base = np.arange(-512, 512)
-#
-# a_min = a.min()
-# a_max = a.max()
-#
-# a = (a - a_min) * (2 / (a_max - a_min)) -1
-# neg_mask = a < 0
-# a = np.abs(a) ** (1 / GAMMA)
-# a[neg_mask] *= -1
-# a = a * 254 + 1
-#
-# plt.plot(base, a)
-# plt.show()
