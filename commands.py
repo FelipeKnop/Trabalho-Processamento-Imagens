@@ -7,6 +7,8 @@ import scipy.ndimage
 import scipy.signal
 import numpy as np
 
+import matplotlib.pyplot as plt
+
 import utils
 import huffman
 
@@ -344,15 +346,21 @@ def idft(image):
 def fourier(image, img_mode, inverse, numpy):
     if inverse:
         out_image = np.empty_like(image, dtype='uint8')
-        out_image[:,:,1] = np.real(image[:,:,1])
-        out_image[:,:,2] = np.real(image[:,:,2])
+        # out_image[:,:,1] = image[:,:,1].real
+        # out_image[:,:,2] = image[:,:,2].real
 
         if numpy:
-            temp = np.fft.ifft2(image[:,:,0])
+            # temp = np.fft.ifft2(image[:,:,0])
+            out_image[:,:,0] = np.fft.ifft2(image[:,:,0]).real.astype('uint8')
+            out_image[:,:,1] = np.fft.ifft2(image[:,:,1]).real.astype('uint8')
+            out_image[:,:,2] = np.fft.ifft2(image[:,:,2]).real.astype('uint8')
         else:
-            temp = idft(image[:,:,0])
+            # temp = idft(image[:,:,0])
+            out_image[:,:,0] = idft(image[:,:,0]).real.astype('uint8')
+            out_image[:,:,1] = idft(image[:,:,1]).real.astype('uint8')
+            out_image[:,:,2] = idft(image[:,:,2]).real.astype('uint8')
 
-        out_image[:,:,0] = np.real(temp)
+        # out_image[:,:,0] = np.real(temp)
 
         return convert(out_image, 'YCbCr', 'RGB')
 
@@ -360,15 +368,21 @@ def fourier(image, img_mode, inverse, numpy):
         image = convert(image, img_mode, 'YCbCr')
 
         out_image = np.empty_like(image, dtype='complex')
-        out_image[:,:,1] = image[:,:,1]
-        out_image[:,:,2] = image[:,:,2]
+        # out_image[:,:,1] = image[:,:,1]
+        # out_image[:,:,2] = image[:,:,2]
 
         if numpy:
-            temp = np.fft.fft2(image[:,:,0])
+            # temp = np.fft.fft2(image[:,:,0])
+            out_image[:,:,0] = np.fft.fft2(image[:,:,0])
+            out_image[:,:,1] = np.fft.fft2(image[:,:,1])
+            out_image[:,:,2] = np.fft.fft2(image[:,:,2])
         else:
-            temp = dft(image[:,:,0])
+            # temp = dft(image[:,:,0])
+            out_image[:,:,0] = dft(image[:,:,0])
+            out_image[:,:,1] = dft(image[:,:,1])
+            out_image[:,:,2] = dft(image[:,:,2])
 
-        out_image[:,:,0] = temp
+        # out_image[:,:,0] = temp
 
         return out_image
 
@@ -438,104 +452,164 @@ def resize(image, scale, mode):
 GAMMA = 1.6
 GAMMA_R = 1.38
 GAMMA_I = 0.9
-CS = 6 # Chroma Subsampling
+CS = 8 # Chroma subsampling
+
+def compress_channel(channel):
+    nrow, ncol = channel.shape
+
+    # Center the channel
+
+    channel = np.roll(channel, int(nrow / 2), 0)
+    channel = np.roll(channel, int(ncol / 2), 1)
+
+    # Spiral ordering
+
+    channel = utils.matrix_to_spiral(channel)
+
+    # Quantization
+
+    # channel = channel / utils.quantization_matrix(channel)
+
+    channel_min = channel.min()
+    channel_max = channel.max()
+
+    # channel = ((channel - channel_min) * (2 / (channel_max - channel_min))) - 1
+    # neg_mask = channel < 0
+    # channel = np.abs(channel) ** (1 / GAMMA)
+    # channel[neg_mask] *= -1
+    # channel = (channel + 1) / 2
+    # channel = channel * 254 + 1
+
+    channel = (channel - channel_min) / (channel_max - channel_min)
+    channel = channel ** (1 / GAMMA)
+    channel = channel * 254 + 1
+
+    channel = channel.astype('int')
+
+    # Run-length encode
+
+    channel_zero = int(round((-channel_min / (channel_max - channel_min)) * 254.0, 10) + 1)
+    channel = utils.rl_encode(channel, channel_zero)
+
+    # Huffman encode
+
+    channel = channel.tobytes()
+    channel = huffman.encode(channel)
+
+    return channel, channel_min, channel_max, len(channel)
+
 
 def compress(image, img_mode, output):
+    # a = base = np.arange(-512, 512)
+    #
+    # a_min = a.min()
+    # a_max = a.max()
+    #
+    # a = ((a - a_min) * (2 / (a_max - a_min))) - 1
+    # neg_mask = a < 0
+    # a = np.abs(a) ** (1 / GAMMA)
+    # a[neg_mask] *= -1
+    # a = (a + 1) / 2
+    # a = a * 254 + 1
+    #
+    # plt.plot(base, a)
+    # plt.show()
+    #
+    # a = (a - 1) / 254
+    # a = (a * 2) - 1
+    # neg_mask = a < 0
+    # a = np.abs(a) ** GAMMA
+    # a[neg_mask] *= -1
+    # a = ((a + 1) * ((a_max - a_min) / 2)) + a_min
+    #
+    # plt.plot(base, a)
+    # plt.show()
+
     shape = image.shape
 
-    fourier_image = fourier(image, img_mode, False, False)
+    image = convert(image, img_mode, 'YCbCr')
 
-    Y = fourier_image[:,:,0]
+    # Chroma subsampling
 
-    # test = np.empty((shape[0], shape[1], 3), dtype='complex')
-    # test[:,:,0] = Y
-    # test[:,:,1] = 128
-    # test[:,:,2] = 128
-    # display(test, 'spectrum', phase=False, logarithm=True, center=True)
+    Y = image[:,:,0]
+    Cb = utils.submatrices(image[:,:,1], CS, CS).mean((2, 3))
+    Cr = utils.submatrices(image[:,:,2], CS, CS).mean((2, 3))
 
-    # Ym = np.sqrt((Y.real)**2 + (Y.imag)**2)
-    # Yp = (np.arctan2(Y.imag, Y.real) + math.pi) * 255 / (2 * math.pi) / 1
+    # Fourier transform
 
-    # Yf =  Ym.max()
-    # Ym = ((Ym / Yf) ** (1 / GAMMA)) * 255
+    Y = dft(Y)
+    Cb = dft(Cb)
+    Cr = dft(Cr)
 
-    Yr = Y.real
-    Yi = Y.imag
+    # Channel compression
 
-    Yrf =  np.abs(Yr).max()
-    Yif =  np.abs(Yi).max()
+    Yr, Yr_min, Yr_max, Yr_length = compress_channel(Y.real)
+    Yi, Yi_min, Yi_max, Yi_length = compress_channel(Y.imag)
+    Cbr, Cbr_min, Cbr_max, Cbr_length = compress_channel(Cb.real)
+    Cbi, Cbi_min, Cbi_max, Cbi_length = compress_channel(Cb.imag)
+    Crr, Crr_min, Crr_max, Crr_length = compress_channel(Cr.real)
+    Cri, Cri_min, Cri_max, Cri_length = compress_channel(Cr.imag)
 
-    neg_mask = Yr < 0
-    Yr = np.abs(Yr / Yrf) ** (1 / GAMMA_R)
-    Yr[neg_mask] *= -1
-    Yr = ((Yr / 2) + 0.5) * 255
+    test = np.empty((shape[0], shape[1], 3), dtype='complex')
+    test[:,:,0] = (Y.real + Y.imag * 1j)
+    test[:,:,1] = 128
+    test[:,:,2] = 128
+    display(test, 'spectrum', phase=False, logarithm=True, center=True)
 
-    neg_mask = Yi < 0
-    Yi = np.abs(Yi / Yif) ** (1 / GAMMA_I)
-    Yi[neg_mask] *= -1
-    Yi = ((Yi / 2) + 0.5) * 255
+    click.echo((Yr_length, Yi_length, Cbr_length, Cbi_length, Crr_length, Cri_length))
 
-
-    Cb = fourier_image[:,:,1]
-    Cb = utils.submatrices(Cb, CS, CS).mean((2, 3))
-    Cr = fourier_image[:,:,2]
-    Cr = utils.submatrices(Cr, CS, CS).mean((2, 3))
-
-    # Ym = Ym.astype('uint8')
-    # Yp = Yp.astype('uint8')
-    Yr = Yr.astype('uint8')
-    Yi = Yi.astype('uint8')
-    Cb = Cb.real.astype('uint8')
-    Cr = Cr.real.astype('uint8')
-
-    # Ym = utils.matrix_to_spiral(Ym)
-    # Yp = utils.matrix_to_spiral(Yp)
-    Yr = utils.matrix_to_spiral(Yr)
-    Yi = utils.matrix_to_spiral(Yi)
-    Cb = utils.matrix_to_spiral(Cb)
-    Cr = utils.matrix_to_spiral(Cr)
-
-    # Ym = utils.rl_encode(Ym)
-    # Yp = utils.rl_encode(Yp)
-    Yr = utils.rl_encode(Yr, 127)
-    Yi = utils.rl_encode(Yi, 127)
-    # Cb = utils.rl_encode(Cb)
-    # Cr = utils.rl_encode(Cr)
-
-    # Ym = Ym.tobytes()
-    # Yp = Yp.tobytes()
-    Yr = Yr.tobytes()
-    Yi = Yi.tobytes()
-    Cb = Cb.tobytes()
-    Cr = Cr.tobytes()
-
-    # Ym = huffman.encode(Ym)
-    # Yp = huffman.encode(Yp)
-    Yr = huffman.encode(Yr)
-    Yi = huffman.encode(Yi)
-    Cb = huffman.encode(Cb)
-    Cr = huffman.encode(Cr)
-
-    # length_Ym = len(Ym)
-    # length_Yp = len(Yp)
-    length_Yr = len(Yr)
-    length_Yi = len(Yi)
-    length_Cb = len(Cb)
-    length_Cr = len(Cr)
-
-    # click.echo((length_Ym, length_Yp, length_Cb, length_Cr))
-    click.echo((length_Yr, length_Yi, length_Cb, length_Cr))
-
-    # fmt = 'iifiiii%us%us%us%us' % (length_Ym, length_Yp, length_Cb, length_Cr)
-    fmt = 'iiffiiii%us%us%us%us' % (length_Yr, length_Yi, length_Cb, length_Cr)
+    fmt = 'iiffffffffffffiiiiii%us%us%us%us%us%us' % (Yr_length, Yi_length,
+                                                      Cbr_length, Cbi_length,
+                                                      Crr_length, Cri_length)
 
     with open(output, 'wb') as file:
-        # file.write(struct.pack(fmt, shape[0], shape[1], Yf,
-        #                        length_Ym, length_Yp, length_Cb, length_Cr,
-        #                        Ym, Yp, Cb, Cr))
-        file.write(struct.pack(fmt, shape[0], shape[1], Yrf, Yif,
-                               length_Yr, length_Yi, length_Cb, length_Cr,
-                               Yr, Yi, Cb, Cr))
+        file.write(struct.pack(fmt,
+                               shape[0], shape[1],
+                               Yr_min, Yr_max, Yi_min, Yi_max,
+                               Cbr_min, Cbr_max, Cbi_min, Cbi_max,
+                               Crr_min, Crr_max, Cri_min, Cri_max,
+                               Yr_length, Yi_length,
+                               Cbr_length, Cbi_length,
+                               Crr_length, Cri_length,
+                               Yr, Yi, Cbr, Cbi, Crr, Cri))
+
+
+def decompress_channel(channel, nrow, ncol, channel_min, channel_max):
+    # Huffman decode
+
+    channel = huffman.decode(channel)
+    channel = np.frombuffer(channel, dtype='int')
+
+    # Run-length decode
+
+    channel_zero = int(round((-channel_min / (channel_max - channel_min)) * 254.0, 10) + 1)
+    channel = utils.rl_decode(channel, channel_zero)
+
+    # Reconstruction
+
+    # channel = channel * utils.quantization_matrix(channel)
+
+    # channel = (channel - 1) / 254
+    # channel = (channel * 2) - 1
+    # neg_mask = channel < 0
+    # channel = np.abs(channel) ** GAMMA
+    # channel[neg_mask] *= -1
+    # channel = ((channel + 1) * ((channel_max - channel_min) / 2)) + channel_min
+
+    channel = (channel - 1) / 254
+    channel = channel ** GAMMA
+    channel = (channel * (channel_max - channel_min)) + channel_min
+
+    # Matrix ordering
+
+    channel = utils.matrix_from_spiral(channel, nrow, ncol)
+
+    # Decenter the channel
+
+    channel = np.roll(channel, int(nrow / 2), 0)
+    channel = np.roll(channel, int(ncol / 2), 1)
+
+    return channel
 
 
 def decompress(input):
@@ -543,76 +617,69 @@ def decompress(input):
         data = file.read()
 
     shape, data = struct.unpack('ii', data[:8]), data[8:]
-    # (Yf, length_Ym, length_Yp, length_Cb, length_Cr), data = struct.unpack('fiiii', data[:20]), data[20:]
-    (Yrf, Yif, length_Yr, length_Yi, length_Cb, length_Cr), data = struct.unpack('ffiiii', data[:24]), data[24:]
+    (Yr_min, Yr_max, Yi_min, Yi_max), data = struct.unpack('ffff', data[:16]), data[16:]
+    (Cbr_min, Cbr_max, Cbi_min, Cbi_max), data = struct.unpack('ffff', data[:16]), data[16:]
+    (Crr_min, Crr_max, Cri_min, Cri_max), data = struct.unpack('ffff', data[:16]), data[16:]
 
-    # fmt = '%us%us%us%us' % (length_Ym, length_Yp, length_Cb, length_Cr)
-    fmt = '%us%us%us%us' % (length_Yr, length_Yi, length_Cb, length_Cr)
-    # (Ym, Yp, Cb, Cr) = struct.unpack(fmt, data)
-    (Yr, Yi, Cb, Cr) = struct.unpack(fmt, data)
+    (Yr_length, Yi_length), data = struct.unpack('ii', data[:8]), data[8:]
+    (Cbr_length, Cbi_length), data = struct.unpack('ii', data[:8]), data[8:]
+    (Crr_length, Cri_length), data = struct.unpack('ii', data[:8]), data[8:]
 
-    # Ym = huffman.decode(Ym)
-    # Yp = huffman.decode(Yp)
-    Yr = huffman.decode(Yr)
-    Yi = huffman.decode(Yi)
-    Cb = huffman.decode(Cb)
-    Cr = huffman.decode(Cr)
+    fmt = '%us%us%us%us%us%us' % (Yr_length, Yi_length,
+                                  Cbr_length, Cbi_length,
+                                  Crr_length, Cri_length)
+    (Yr, Yi, Cbr, Cbi, Crr, Cri) = struct.unpack(fmt, data)
 
-    # Ym = np.frombuffer(Ym, dtype='uint8')
-    # Yp = np.frombuffer(Yp, dtype='uint8')
-    Yr = np.frombuffer(Yr, dtype='uint8')
-    Yi = np.frombuffer(Yi, dtype='uint8')
-    Cb = np.frombuffer(Cb, dtype='uint8')
-    Cr = np.frombuffer(Cr, dtype='uint8')
+    Yr = decompress_channel(Yr, shape[0], shape[1], Yr_min, Yr_max)
+    Yi = decompress_channel(Yi, shape[0], shape[1], Yi_min, Yi_max)
+    Cbr = decompress_channel(Cbr, int(shape[0] / CS), int(shape[1] / CS), Cbr_min, Cbr_max)
+    Cbi = decompress_channel(Cbi, int(shape[0] / CS), int(shape[1] / CS), Cbi_min, Cbi_max)
+    Crr = decompress_channel(Crr, int(shape[0] / CS), int(shape[1] / CS), Crr_min, Crr_max)
+    Cri = decompress_channel(Cri, int(shape[0] / CS), int(shape[1] / CS), Cri_min, Cri_max)
 
-    # Ym = utils.rl_decode(Ym)
-    # Yp = utils.rl_decode(Yp)
-    Yr = utils.rl_decode(Yr, 127)
-    Yi = utils.rl_decode(Yi, 127)
-    # Cb = utils.rl_decode(Cb)
-    # Cr = utils.rl_decode(Cr)
-
-    # Ym = utils.matrix_from_spiral(Ym, shape[0], shape[1])
-    # Yp = utils.matrix_from_spiral(Yp, shape[0], shape[1])
-    Yr = utils.matrix_from_spiral(Yr, shape[0], shape[1])
-    Yi = utils.matrix_from_spiral(Yi, shape[0], shape[1])
-    Cb = utils.matrix_from_spiral(Cb, math.ceil(shape[0] / CS), math.ceil(shape[1] / CS))
-    Cr = utils.matrix_from_spiral(Cr, math.ceil(shape[0] / CS), math.ceil(shape[1] / CS))
-
-    # Ym = ((Ym / 255) ** GAMMA) * Yf
-    # Yp = (Yp * ((2 * math.pi) / 255) * 1) - math.pi
-    # Y = ((Ym * np.cos(Yp)) + (Ym * np.sin(Yp)) * 1j).reshape(shape)
-
-    Yr = ((Yr / 255) - 0.5) * 2
-    neg_mask = Yr < 0
-    Yr = np.abs(Yr) ** (GAMMA_R)
-    Yr[neg_mask] *= -1
-    Yr = Yr * Yrf
-
-    Yi = ((Yi / 255) - 0.5) * 2
-    neg_mask = Yi < 0
-    Yi = np.abs(Yi) ** (GAMMA_I)
-    Yi[neg_mask] *= -1
-    Yi = Yi * Yif
+    test = np.empty((shape[0], shape[1], 3), dtype='complex')
+    test[:,:,0] = (Yr + Yi * 1j)
+    test[:,:,1] = 128
+    test[:,:,2] = 128
+    display(test, 'spectrum', phase=False, logarithm=True, center=True)
 
     Y = (Yr + Yi * 1j)
+    Cb = (Cbr + Cbi * 1j)
+    Cr = (Crr + Cri * 1j)
 
-    # test = np.empty((shape[0], shape[1], 3), dtype='complex')
-    # test[:,:,0] = Y
-    # test[:,:,1] = 128
-    # test[:,:,2] = 128
-    # display(test, 'spectrum', phase=False, logarithm=True, center=True)
+    # Fourier transform
 
-    # Cb = Cb * 4
+    Y = idft(Y).real.astype('uint8')
+    Cb = idft(Cb).real.astype('uint8')
+    Cr = idft(Cr).real.astype('uint8')
+
+    # Chroma resampling
+
     Cb = np.repeat(Cb, CS, 0)
     Cb = np.repeat(Cb, CS, 1)
-    # Cr = Cr * 4
     Cr = np.repeat(Cr, CS, 0)
     Cr = np.repeat(Cr, CS, 1)
 
-    decoded_image = np.empty((shape[0], shape[1], 3), dtype='complex')
+    decoded_image = np.empty((shape[0], shape[1], 3), dtype='uint8')
     decoded_image[:,:,0] = Y
     decoded_image[:,:,1] = Cb[:shape[0],:shape[1]]
     decoded_image[:,:,2] = Cr[:shape[0],:shape[1]]
 
-    return fourier(decoded_image, 'spectrum', True, False)
+    decoded_image = convert(decoded_image, 'YCbCr', 'RGB')
+
+    return decoded_image
+
+
+# a = base = np.arange(-512, 512)
+#
+# a_min = a.min()
+# a_max = a.max()
+#
+# a = (a - a_min) * (2 / (a_max - a_min)) -1
+# neg_mask = a < 0
+# a = np.abs(a) ** (1 / GAMMA)
+# a[neg_mask] *= -1
+# a = a * 254 + 1
+#
+# plt.plot(base, a)
+# plt.show()

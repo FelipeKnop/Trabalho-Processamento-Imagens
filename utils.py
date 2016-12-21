@@ -5,6 +5,7 @@ import PIL.Image
 import scipy.signal
 import click
 
+import matplotlib.pyplot as plt
 
 def dist(x1, y1, x2, y2):
     return math.sqrt((x2-x1)**2 + (y2-y1)**2)
@@ -24,6 +25,7 @@ def normalize(array, new_min, new_max, ignore_first_max = False):
 # Reference: http://stackoverflow.com/a/29216609
 def quantization_matrix(A, Q=50):
     base_matrix = np.linspace(0.7, 0.1, A.shape[0]) * (np.abs(A).max() / 255)
+    plt.plot(base_matrix)
 
     if Q < 50:
         S = 5000/(Q+1)
@@ -32,14 +34,17 @@ def quantization_matrix(A, Q=50):
 
     q_matrix = np.floor((S * base_matrix + 50) / 100).astype('int')
 
+    plt.plot(q_matrix)
+    plt.show()
+
     return q_matrix
 
 
 # Reference: http://stackoverflow.com/a/16715845
 def submatrices(A, nrow, ncol, padding=True):
     if padding:
-        padr = A.shape[0] % nrow
-        padc = A.shape[1] % ncol
+        padr = (A.shape[0]-1) % nrow + 1
+        padc = (A.shape[1]-1) % ncol + 1
         A = np.pad(A, ((0, nrow - padr), (0, ncol - padc)), 'edge')
 
     lenr = int(A.shape[0] / nrow)
